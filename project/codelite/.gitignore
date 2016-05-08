@@ -1,0 +1,6 @@
+Debug
+Release
+.clang
+.codelite
+Element.mk
+Makefile

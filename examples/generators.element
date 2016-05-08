@@ -1,0 +1,35 @@
+// 'for' loops work only with generator objects, arrays are implicitly converted to generators
+for( i in ["a", "b", "c"] )
+	print(i)
+
+// you can also convert them explicitly
+g = make_generator([1, 2, 3, 12])
+
+for( i in g )
+	print(i)
+
+// 'range' creates a generator object, which can be iterated
+for( i in range(10, 100, 5) )
+	print(i)
+
+// custom generator objects, need to specify a 'has_value' and a 'next_value' functions
+factorials_generator:(_n)
+[	i = 0,
+	n = _n,
+	factorial = 1,
+	has_value :: this.i <= this.n,
+	next_value ::
+	{	v = this.factorial
+		this.i += 1
+		this.factorial *= this.i
+		return v
+	}
+]
+
+// then they can also be iterated using a 'for' expression
+for( i in factorials_generator(7) )
+	print(i)
+
+// certain standard functions can work on generators as well as on arrays
+range(10) -> each(::$ -> print())
+range(2, 8) -> reduce(::$ * $1) -> print()

@@ -1,0 +1,86 @@
+ShowGC ::
+{
+	data = memory_stats() // +1 object
+	/*
+	print("heap strings count:")
+	data.heap_strings_count -> print()
+
+	print("heap arrays count:")
+	data.heap_arrays_count -> print()
+
+	print("heap objects count:")
+	data.heap_objects_count -> print()
+
+	print("heap functions count:")
+	data.heap_functions_count -> print()
+
+	print("heap boxes count:")
+	data.heap_boxes_count -> print()
+
+	print("heap generators count:")
+	data.heap_generators_count -> print()
+	*/
+	print("heap total count:")
+	data.heap_total_count -> print()
+
+	return data.heap_total_count
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/*
+MakeGarbage :: // +1 function closure, +1 box
+{
+	a = [] // +1 array
+	
+	for( i in range(5) ) // +1 generator
+		a << "abc" ~ "def" // +5 strings
+	
+	for( i in [1,2,3,4,5] ) // +1 array, +1 generator
+		a << ~i // +5 strings
+	
+	o = [c=0] // +1 object
+	
+	// +1 array, +10 strings, +1 function closure
+	a -> map(::to_upper($)) -> each(::o.c += #$)
+	
+	// total 29
+}
+
+100 -> times(::MakeGarbage())
+
+while( ShowGC() > 10 )
+	garbage_collect(150)
+*/
+////////////////////////////////////////////////////////////////////////////////
+
+g1 = []
+g2 = []
+c = 0
+
+while( c < 50 )
+{
+	for( i in range(100) )
+	{
+		g1 << "str_" ~ i
+		
+		if( i % 2 == c % 2 )
+			g2 << nil
+		else
+			g2 << g1[i]
+	}
+	
+	l = ""
+	
+	100 -> times(::g1 >> l)
+	
+	while( #g2 > 0 )
+		g2 >> l
+	
+	c += 1
+	
+	print(".")
+	garbage_collect(109)
+}
+
+print("done")
+ShowGC()

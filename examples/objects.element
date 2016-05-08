@@ -1,0 +1,110 @@
+// objects are defined like arrays but with assignments to separate keys from values
+object = [ x = 3, y = 4 ]
+
+// as with normal functions, member function assignment doesn't need the '=' operator
+object.print :: print("(" ~ this.x ~ ", " ~ this.y ~ ")")
+
+// the 'this' object always points to the object the function belongs to
+object.length :: sqrt( this.x ^ 2 + this.y ^ 2 )
+
+object.print()
+
+// note that the arrow operator '->' is not for member access
+object.length() -> print()
+
+// the empty object literal is different from the literal for an empty array
+object = [=]
+
+
+// objects can be linked to one another using the special 'proto' member
+foo = [str0 = "foo", str1 = "!!!"]
+bar = [str0 = "bar"]
+
+bar.proto = foo
+
+// when you access a member of an object, the search for the member starts with the object itself
+print(bar.str0)
+
+// if your object doesn't have such a member, the search continues with its 'proto' object
+print(bar.str1)
+
+// if the member is not found anywhere, nil is returned
+print(bar.str2)
+
+
+// defining a class-like object
+Person = [=]
+
+Person.new:(_name)
+[	name = _name,
+	proto = Person
+]
+
+Person.Introduce :: print("Hi! I am " ~ this.name)
+
+// making instances of the class object
+jack = Person.new("Jack")
+john = Person.new("John")
+
+jack.Introduce()
+john.Introduce()
+
+// inheritance can be achieved by setting the proto object of the derived class
+// to point to the base class object
+Student = [=]
+
+Student.new:(_name, _school)
+{	s = Person.new(_name)
+	s.school = _school
+	s.proto = Student
+	s // return s
+}
+
+Student.Introduce ::
+{	// to call the base class function, we need to explicitly call it with our 'this'
+	this_call(this.proto.proto.Introduce, this)
+	print("and I study at " ~ this.school)
+}
+
+// we set the 'proto' object after we define the 'new' so that it doesn't get overwritten
+Student.proto = Person
+
+// making an instance of the derived class
+james = Student.new("James", "FMI")
+
+james.Introduce()
+
+// another way of defining the class-like structures of objects
+Person =
+[	new:(_name)
+	[	name = _name,
+		proto = Person
+	],
+	
+	SayHi :: print("Hi! I am " ~ this.name)
+]
+
+tom = Person.new("Tom")
+tom.SayHi()
+
+ted = Person.new("Ted")
+ted.SayHi()
+
+Student =
+[	proto = Person,
+
+	new:(_name, _school)
+	{	s = Person.new(_name)
+		s.school = _school
+		s.proto = Student
+		return s
+	},
+
+	SayHi ::
+	{	this_call(this.proto.proto.SayHi, this)
+		print("and I study at " ~ this.school)
+	}
+]
+
+tim = Student.new("Tim", "FMI")
+tim.SayHi()

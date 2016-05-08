@@ -1,0 +1,64 @@
+// a simple function which creates a closure
+adder:(a)
+{
+	:(b) a + b
+}
+
+f = adder(6)
+
+f(5) -> print()
+
+// the "closed-over" variable 'c' is shared among the functions 'a', 'b' and 'get'
+makeFunctions ::
+{
+	c = 0
+	
+	a :: c += 1
+	b :: c -= 1
+	get :: c
+
+	[a,b,get]
+}
+
+funcs = makeFunctions()
+a = funcs[0]
+b = funcs[1]
+get = funcs[2]
+
+a(); a()
+b()
+a(); a()
+
+get() -> print()
+
+/*
+// this is used to demonstrate the inner workings of variable capture
+A ::
+{
+	a0 = 1	// 0
+	a1 = 1	// 1	new box
+	a2 = 1	// 2	new box
+	B ::	// 3
+	{
+		// 1 -> 4, 2 -> 0
+		a2 = 2	// 0
+		b1 = 2	// 1	new box
+		b2 = 2	// 2
+		C ::	// 3
+		{
+			// 4 -> 0, 1 -> 1
+			a1 = 3	// 0
+			b1 = 3	// 1
+			c2 = 3	// 2
+		}
+				// 4
+		D ::	// 5
+		{
+			// 4 -> 1, 1 -> 0
+			b1 = 4	// 0
+			a1 = 4	// 1
+			c2 = 4	// 2
+		}
+	}
+}
+*/

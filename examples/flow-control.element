@@ -1,0 +1,96 @@
+// 'if' expression examples
+if( true )
+	print("do stuff")
+
+if( false or true )
+{
+	print("do more")
+	print("stuff")
+}
+
+if( true )
+	print("then path")
+else
+	print("else path")
+
+if( false )
+	print("option 1")
+elif( true )
+	print("option 2")
+elif( false )
+	print("option 3")
+else
+	print("option 4")
+
+// 'while' loop example
+a = 17
+while( a > 0 )
+	a -= 10
+
+// 'for' loop example
+s = ""
+for( i in [10, 20, 30] )
+	s ~= " " ~ i
+
+// 'break' and 'continue' example
+for( i in [1, 2, "abc", 3, nil, 4] )
+{
+	if( type(i) == "string" )
+		continue
+	
+	if( type(i) == "nil" )
+		break
+	
+	print(i)
+}
+
+// the result of an 'if' expression is either the 'then' or the 'else' expression
+v = if( 4 > 0 ) 17 else 42
+
+print(v)
+
+// if an 'if's condition fails and it doesn't have an 'else', it returns nil
+v = if( false ) "something"
+
+print(v)
+
+// the result of a block is the last expression evaluated in the block
+v = {	t = 16
+		p = t ^ 2
+		p + 2
+		if( p < 100 ) 0 else 42
+	}
+
+print(v)
+
+// the result of a loop is the result of the body of the last iteration
+c = 0
+v = while( c < 10 )
+		c += 1
+
+print(v)
+
+// if the loop does not run not even once, the result is nil
+v = while( false ) 100
+
+print(v)
+
+// if a loop is terminated by a 'break', the result is given by the 'break'
+v = for( i in range(10) )
+	{
+		if( i > 5 )
+			break -1
+		7
+	}
+
+print(v)
+
+// if a 'continue' skips the last iteration, the result is given by the 'continue'
+v = for( i in range(10) )
+	{
+		if( i > 5 )
+			continue -2
+		8
+	}
+
+print(v)

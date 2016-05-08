@@ -1,0 +1,62 @@
+// the most verbose function definition possible, the following are equivalent
+sum = :(a, b) { return a + b }
+
+// the assignment operator is optional if the right-hand-side is a function definition
+sum:(a, b) { return a + b }
+
+// the result of blocks is the last expression in them, so no need for return
+sum:(a, b) { a + b }
+
+// the block expression is not necessary if the body is a single expression
+sum:(a, b) a + b
+
+// the $ or $0 variable represents the first anonymous parameter
+sum:(a) a + $
+
+// if you use only the anonymous parameters, you can skip the parameter list
+sum :: $ + $1
+
+// all functions are lambda functions and need not be assigned to variables
+:: $ + $1
+
+
+// function call
+sum(1, 2)
+
+// lambda function call
+(::$ + $1)(1, 2)
+
+// function call using the arrow operator to "push" the first argument
+1 -> sum(2)
+
+
+// using the arrow operator to chain together transformations over an array
+[1, 2, 3, 4, 5, 6] -> filter(::$ % 2 == 0) -> map(::$ * 2) -> reduce(::$ + $1) -> print()
+
+// this is equivalent to this call
+print( reduce( map( filter( [1, 2, 3, 4, 5, 6], ::$ % 2 == 0 ), ::$ * 2 ), ::$ + $1 ) )
+
+
+// recursion
+factorial:(n)
+	if( n == 0 ) 1
+	else n * factorial(n - 1)
+
+factorial(7) // 5040
+
+
+// anonymous parameters start after the last named parameter
+first_4_arguments:(a, b) print(a, b, $, $1)
+
+first_4_arguments("a", "b", "c", "d")
+
+// you can get all anonymous parameters using the $$ array
+all_arguments :: for( arg in $$ ) print(arg)
+
+// because of this all functions can be called with variable number of arguments
+all_arguments(1, 2, 3, 4)
+all_arguments("first", "second")
+
+arguments_count :: #$$
+
+print( arguments_count(0, 0, 0, 0, 0) )
