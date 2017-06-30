@@ -1,6 +1,7 @@
 #ifndef _COMPILER_INCLUDED_
 #define _COMPILER_INCLUDED_
 
+#include <memory>
 #include <vector>
 #include <deque>
 #include <map>
@@ -18,35 +19,21 @@ class Logger;
 
 class Compiler
 {
-public:		Compiler(Logger& logger);
-	char*	Compile(const std::vector<ast::Node*>& astNodes);
-	void	ResetState();
-	void	DebugPrintBytecode(const char* bytecode, bool printSymbols, bool printConstants) const;
-	
-	void	AddNativeFunction(const std::string& name, int index);
+public:						Compiler(Logger& logger);
 
+	std::unique_ptr<char[]>	Compile(const ast::FunctionNode* node);
+	
+	void					ResetState();
+	
+	void					DebugPrintBytecode(const char* bytecode, bool printSymbols, bool printConstants) const;
+	
 protected:
-	enum NameType
-	{
-		NT_Global,
-		NT_Local,
-		NT_Boxed,
-		NT_Native,
-	};
-	
-	typedef std::map<std::string, int> BlockScope;
-
 	struct FunctionContext
 	{
-		std::vector<unsigned>		jumpToEndIndices;
-		
-		std::vector<AskedVariable>	askedVariables;
-		std::vector<unsigned>		localIndicesToBox;
-		
-		std::deque<BlockScope>		blockScopes;
-		int							totalIndices = 0;
-		
-		int							forLoopsGarbage = 0;
+		std::vector<unsigned>	jumpToEndIndices;
+		int						index = -1;
+		int						totalIndices = 0;
+		int						forLoopsGarbage = 0;
 	};
 
 	struct LoopContext
@@ -82,33 +69,20 @@ protected:
 	bool BuildHashLoadOp	(const ast::Node* node);
 	void BuildJumpStatement	(const ast::Node* node);
 	
-	void PushFunctionContext(const ast::FunctionNode* n);
-	int  PopFunctionContext(int endLocation);
-	
-	void PushBlockScope();
-	void PopBlockScope();
-	
-	void ResolveName(const std::string& name, NameType* outType, int* outIndex);
-	void ResolveBoxed(const std::string& name, int* outIndex);
-	
 	unsigned UpdateSymbol(const std::string& name, int globalIndex = -1);
 	
-	char* BuildBinaryData();
+	std::unique_ptr<char[]> BuildBinaryData();
 
 private:
 	Logger&						mLogger;
 	
-	std::map<std::string, int>	mNativeFunctions;
-	
 	std::deque<Constant>		mConstants;
 	unsigned					mConstantsTotalOffset;
 	
-	CodeSegment*				mCurrentFunction;
 	std::vector<LoopContext>	mLoopContexts;
 	std::vector<FunctionContext>mFunctionContexts;
 	
-	std::map<std::string, int>	mGlobalScope;
-	int							mTotalGlobalIndices;
+	CodeObject*					mCurrentFunction;
 	
 	std::map<unsigned, unsigned>mSymbolIndices;
 	std::vector<Symbol>			mSymbols;

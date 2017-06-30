@@ -8,8 +8,7 @@ namespace element
 
 Interpreter::Interpreter()
 : mLogger			()
-, mLexer			(mLogger)
-, mParser			(mLexer, mLogger)
+, mParser			(mLogger)
 , mSemanticAnalyzer	(mLogger)
 , mCompiler			(mLogger)
 , mVirtualMachine	(mLogger)
@@ -50,76 +49,36 @@ Interpreter::Interpreter()
 
 void Interpreter::Interpret(std::istream& input)
 {
-	std::vector<ast::Node*> expressions;
-	ast::Node* node = nullptr;
+	std::unique_ptr<ast::FunctionNode> node = mParser.Parse(input);
 	
-	char* bytecode = nullptr;
-	
-	mLexer.SetInputStream(input);
-	mLexer.GetNextToken();
-	
-	// Parsing stage ///////////////////////////////////////////////////////////
-	node = mParser.ParseExpression();
-	
-	while( node )
+	if( !mLogger.HasErrorMessages() )
 	{
-		expressions.push_back(node);
-		node = mParser.ParseExpression();
+		if( mDebugPrintAst )
+			mParser.DebugPrintAST(node.get());
+		
+		mSemanticAnalyzer.Analyze(node.get());
+		
+		if( !mLogger.HasErrorMessages() )
+		{
+			std::unique_ptr<char[]> bytecode = mCompiler.Compile(node.get());
+			
+			if( !mLogger.HasErrorMessages() )
+			{
+				if( mDebugPrintSymbols || mDebugPrintConstants )
+					mCompiler.DebugPrintBytecode(bytecode.get(), mDebugPrintSymbols, mDebugPrintConstants);
+				
+				mVirtualMachine.Execute(bytecode.get());
+			}
+		}
 	}
-	
-	if( mDebugPrintAst )
-		for( const auto& expression : expressions )
-			mParser.DebugPrintAST(expression);
 	
 	if( mLogger.HasErrorMessages() )
 	{
 		mLogger.PrintErrorMessages();
 		mLogger.ClearErrorMessages();
-		goto clean;
 	}
 	
-	// Semantic Analysis stage /////////////////////////////////////////////////
-	mSemanticAnalyzer.Analyze(expressions);
-	
-	if( mLogger.HasErrorMessages() )
-	{
-		mLogger.PrintErrorMessages();
-		mLogger.ClearErrorMessages();
-		goto clean;
-	}
-	
-	// Compilation stage ///////////////////////////////////////////////////////
-	bytecode = mCompiler.Compile(expressions);
-	
-	if( mDebugPrintSymbols || mDebugPrintConstants )
-		mCompiler.DebugPrintBytecode(bytecode, mDebugPrintSymbols, mDebugPrintConstants);
-	
-	if( mLogger.HasErrorMessages() )
-	{
-		mLogger.PrintErrorMessages();
-		mLogger.ClearErrorMessages();
-		goto clean;
-	}
-	
-	// Execution stage /////////////////////////////////////////////////////////
-	mVirtualMachine.Execute(bytecode);
-	
-	if( mLogger.HasErrorMessages() )
-	{
-		mLogger.PrintErrorMessages();
-		mLogger.ClearErrorMessages();
-		goto clean;
-	}
-	
-	// When all is said and done, time to take out the trash ///////////////////
-clean:
 	mVirtualMachine.ClearError();
-
-	if( bytecode )
-		delete bytecode;
-	
-	for( const auto& expression : expressions )
-		delete expression;
 }
 
 void Interpreter::Interpret(const char* bytecode)
@@ -158,7 +117,7 @@ std::string Interpreter::GetVersion() const
 void Interpreter::RegisterNativeFunction(const std::string& name, Value::NativeFunction function)
 {
 	int index = mVirtualMachine.AddNativeFunction(function);
-	mCompiler.AddNativeFunction(name, index);
+	mSemanticAnalyzer.AddNativeFunction(name, index);
 }
 
 }

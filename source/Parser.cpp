@@ -9,193 +9,44 @@
 namespace element
 {
 
-Parser::Parser(Lexer& lexer, Logger& logger)
-: mLexer(lexer)
-, mLogger(logger)
+Parser::Parser(Logger& logger)
+: mLogger(logger)
+, mLexer(logger)
 {
 }
 
-ast::Node* Parser::ParseExpression()
+std::unique_ptr<ast::FunctionNode> Parser::Parse(std::istream& input)
 {
-	Token prevToken		= T_InvalidToken;
-	Token currentToken	= mLexer.GetCurrentToken();
+	mLexer.SetInputStream(input);
+	mLexer.GetNextToken();
 	
-	// Check for left over expression termination symbols
-	while( currentToken == T_NewLine || currentToken == T_Semicolumn )
-		currentToken = mLexer.GetNextToken_IgnoreNewLine(); // eat \n or ;
+	std::vector<ast::Node*> expressions;
 	
-	if( currentToken == T_EOF )
+	ast::Node* node = ParseExpression();
+	
+	while( node )
+	{
+		expressions.push_back(node);
+		node = ParseExpression();
+	}
+	
+	if( mLogger.HasErrorMessages() )
+	{
+		for( const auto& expression : expressions )
+			delete expression;
+		
 		return nullptr;
-	
-	// https://www.engr.mun.ca/~theo/Misc/exp_parsing.htm
-	// https://en.wikipedia.org/wiki/Shunting-yard_algorithm
-	std::vector<Operator>	operators;
-	std::vector<ast::Node*>	operands;
-	
-	operators.push_back({T_InvalidToken, -1, ET_UnaryOperator, nullptr}); // sentinel
-	SourceCoords	coords;
-	ExpressionType	expressionType = ET_Unknown;
-	
-	bool primaryExpected = false;
-	
-	do // the actual parsing
-	{
-		primaryExpected = false;
-		coords			= mLexer.GetCurrentCoords();
-		expressionType	= CurrentExpressionType(prevToken, currentToken);
-		
-		switch( expressionType )
-		{
-		case ET_BinaryOperator:
-		case ET_UnaryOperator:
-		{
-			const OperatorInfo& op = GetOperatorInfo(currentToken, expressionType == ET_BinaryOperator);
-			
-			while( 	(op.precedence < operators.back().precedence) ||
-					(op.precedence == operators.back().precedence && !op.isRightAssociative) )
-			{
-				FoldOperatorStacks(operators, operands);
-			}
-			
-			operators.push_back({
-				currentToken, 
-				op.precedence, 
-				expressionType, 
-				nullptr, 
-				coords
-			});
-			
-			primaryExpected = true;
-			mLexer.GetNextToken_IgnoreNewLine();
-			break;
-		}
-		
-		case ET_IndexOperator:
-		{
-			const OperatorInfo& op = GetOperatorInfo(currentToken, expressionType == ET_BinaryOperator);
-			
-			while( 	(op.precedence < operators.back().precedence) ||
-					(op.precedence == operators.back().precedence && !op.isRightAssociative) )
-			{
-				FoldOperatorStacks(operators, operands);
-			}
-			
-			ast::Node* auxNode = ParseIndexOperator();
-			
-			if( ! auxNode ) // propagate error
-			{
-				for( ast::Node* trash : operands )
-					delete trash;
-				return nullptr;
-			}
-			
-			operators.push_back({
-				currentToken, 
-				op.precedence, 
-				expressionType, 
-				auxNode, 
-				coords
-			});
-			break;
-		}
-		
-		case ET_FunctionCall:
-		{
-			const OperatorInfo& op = GetOperatorInfo(currentToken, expressionType == ET_BinaryOperator);
-			
-			while( 	(op.precedence < operators.back().precedence) ||
-					(op.precedence == operators.back().precedence && !op.isRightAssociative) )
-			{
-				FoldOperatorStacks(operators, operands);
-			}
-			
-			ast::Node* auxNode = ParseArguments();
-			
-			if( ! auxNode ) // propagate error
-			{
-				for( ast::Node* trash : operands )
-					delete trash;
-				return nullptr;
-			}
-			
-			operators.push_back({
-				currentToken, 
-				op.precedence, 
-				expressionType, 
-				auxNode, 
-				coords
-			});
-			break;
-		}
-		
-		case ET_FunctionAssignment:
-		{
-			const OperatorInfo& op = GetOperatorInfo(currentToken, expressionType == ET_BinaryOperator);
-			
-			while( 	(op.precedence < operators.back().precedence) ||
-					(op.precedence == operators.back().precedence && !op.isRightAssociative) )
-			{
-				FoldOperatorStacks(operators, operands);
-			}
-			
-			ast::Node* auxNode = ParseFunction();
-			
-			if( ! auxNode ) // propagate error
-			{
-				for( ast::Node* trash : operands )
-					delete trash;
-				return nullptr;
-			};
-			
-			operators.push_back({
-				currentToken, 
-				op.precedence, 
-				expressionType, 
-				auxNode, 
-				coords
-			});
-			break;
-		}
-		
-		case ET_PrimaryExpression:
-		{
-			ast::Node* node = ParsePrimary();
-			
-			if( ! node ) // propagate error
-			{
-				for( ast::Node* trash : operands )
-					delete trash;
-				return nullptr;
-			}
-			
-			operands.push_back( node );
-			break;
-		}
-		
-		case ET_Unknown:
-		default:
-		{
-			mLogger.PushError(coords, "Syntax error: operator expected");
-			for( ast::Node* trash : operands )
-				delete trash;
-			return nullptr;
-		}
-		}
-		
-		prevToken	= currentToken;
-		currentToken= mLexer.GetCurrentToken();
-	}
-	while( !IsExpressionTerminator(currentToken) || primaryExpected );
-	
-	
-	// no more of this expression, fold everything to a single node
-	while(	operands.size() > 1 || // last thing left is the result
-			operators.size() > 1 ) // parse all, leave only the sentinel
-	{
-		FoldOperatorStacks(operators, operands);
 	}
 	
-	return operands.back();
+	ast::Node* body = nullptr;
+	
+	if( expressions.size() == 1 )
+		body = expressions.front();
+	else // zero or more than one expressions form a block
+		body = new ast::BlockNode(expressions, SourceCoords());
+	
+	// return the global "main" function
+	return std::make_unique<ast::FunctionNode>(std::vector<std::string>(), body, SourceCoords());
 }
 
 void Parser::DebugPrintAST(const ast::Node* root, int indent) const
@@ -412,6 +263,189 @@ void Parser::DebugPrintAST(const ast::Node* root, int indent) const
 	default:
 		{}
 	}
+}
+
+ast::Node* Parser::ParseExpression()
+{
+	Token prevToken		= T_InvalidToken;
+	Token currentToken	= mLexer.GetCurrentToken();
+	
+	// Check for left over expression termination symbols
+	while( currentToken == T_NewLine || currentToken == T_Semicolumn )
+		currentToken = mLexer.GetNextToken_IgnoreNewLine(); // eat \n or ;
+	
+	if( currentToken == T_EOF )
+		return nullptr;
+	
+	// https://www.engr.mun.ca/~theo/Misc/exp_parsing.htm
+	// https://en.wikipedia.org/wiki/Shunting-yard_algorithm
+	std::vector<Operator>	operators;
+	std::vector<ast::Node*>	operands;
+	
+	operators.push_back({T_InvalidToken, -1, ET_UnaryOperator, nullptr}); // sentinel
+	SourceCoords	coords;
+	ExpressionType	expressionType = ET_Unknown;
+	
+	bool primaryExpected = false;
+	
+	do // the actual parsing
+	{
+		primaryExpected = false;
+		coords			= mLexer.GetCurrentCoords();
+		expressionType	= CurrentExpressionType(prevToken, currentToken);
+		
+		switch( expressionType )
+		{
+		case ET_BinaryOperator:
+		case ET_UnaryOperator:
+		{
+			const OperatorInfo& op = GetOperatorInfo(currentToken, expressionType == ET_BinaryOperator);
+			
+			while( 	(op.precedence < operators.back().precedence) ||
+					(op.precedence == operators.back().precedence && !op.isRightAssociative) )
+			{
+				FoldOperatorStacks(operators, operands);
+			}
+			
+			operators.push_back({
+				currentToken, 
+				op.precedence, 
+				expressionType, 
+				nullptr, 
+				coords
+			});
+			
+			primaryExpected = true;
+			mLexer.GetNextToken_IgnoreNewLine();
+			break;
+		}
+		
+		case ET_IndexOperator:
+		{
+			const OperatorInfo& op = GetOperatorInfo(currentToken, expressionType == ET_BinaryOperator);
+			
+			while( 	(op.precedence < operators.back().precedence) ||
+					(op.precedence == operators.back().precedence && !op.isRightAssociative) )
+			{
+				FoldOperatorStacks(operators, operands);
+			}
+			
+			ast::Node* auxNode = ParseIndexOperator();
+			
+			if( ! auxNode ) // propagate error
+			{
+				for( ast::Node* trash : operands )
+					delete trash;
+				return nullptr;
+			}
+			
+			operators.push_back({
+				currentToken, 
+				op.precedence, 
+				expressionType, 
+				auxNode, 
+				coords
+			});
+			break;
+		}
+		
+		case ET_FunctionCall:
+		{
+			const OperatorInfo& op = GetOperatorInfo(currentToken, expressionType == ET_BinaryOperator);
+			
+			while( 	(op.precedence < operators.back().precedence) ||
+					(op.precedence == operators.back().precedence && !op.isRightAssociative) )
+			{
+				FoldOperatorStacks(operators, operands);
+			}
+			
+			ast::Node* auxNode = ParseArguments();
+			
+			if( ! auxNode ) // propagate error
+			{
+				for( ast::Node* trash : operands )
+					delete trash;
+				return nullptr;
+			}
+			
+			operators.push_back({
+				currentToken, 
+				op.precedence, 
+				expressionType, 
+				auxNode, 
+				coords
+			});
+			break;
+		}
+		
+		case ET_FunctionAssignment:
+		{
+			const OperatorInfo& op = GetOperatorInfo(currentToken, expressionType == ET_BinaryOperator);
+			
+			while( 	(op.precedence < operators.back().precedence) ||
+					(op.precedence == operators.back().precedence && !op.isRightAssociative) )
+			{
+				FoldOperatorStacks(operators, operands);
+			}
+			
+			ast::Node* auxNode = ParseFunction();
+			
+			if( ! auxNode ) // propagate error
+			{
+				for( ast::Node* trash : operands )
+					delete trash;
+				return nullptr;
+			};
+			
+			operators.push_back({
+				currentToken, 
+				op.precedence, 
+				expressionType, 
+				auxNode, 
+				coords
+			});
+			break;
+		}
+		
+		case ET_PrimaryExpression:
+		{
+			ast::Node* node = ParsePrimary();
+			
+			if( ! node ) // propagate error
+			{
+				for( ast::Node* trash : operands )
+					delete trash;
+				return nullptr;
+			}
+			
+			operands.push_back( node );
+			break;
+		}
+		
+		case ET_Unknown:
+		default:
+		{
+			mLogger.PushError(coords, "Syntax error: operator expected");
+			for( ast::Node* trash : operands )
+				delete trash;
+			return nullptr;
+		}
+		}
+		
+		prevToken	= currentToken;
+		currentToken= mLexer.GetCurrentToken();
+	}
+	while( !IsExpressionTerminator(currentToken) || primaryExpected );
+	
+	
+	// no more of this expression, fold everything to a single node
+	while(	operands.size() > 1 || // last thing left is the result
+			operators.size() > 1 ) // parse all, leave only the sentinel
+	{
+		FoldOperatorStacks(operators, operands);
+	}
+	
+	return operands.back();
 }
 
 ast::Node* Parser::ParsePrimary()

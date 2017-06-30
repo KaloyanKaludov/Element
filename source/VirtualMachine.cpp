@@ -14,9 +14,7 @@ namespace element
 
 VirtualMachine::VirtualMachine(Logger& logger)
 : mLogger(logger)
-, mCurrentFrame(nullptr)
 , mLastObject(nullptr)
-, mInstructionsProcessed(0)
 {
 }
 
@@ -24,36 +22,11 @@ void VirtualMachine::Execute(const char* bytecode)
 {
 	int firstFunctionConstantIndex = ParseBytecode(bytecode);
 	
-	mStackFrames.clear();
-	mStackFrames.emplace_back();
-	mCurrentFrame = &mStackFrames.back();
-	
 	Function* main = mConstants[ firstFunctionConstantIndex ].function;
 	
-	mCurrentFrame->function			= main;
-	mCurrentFrame->instructions		= main->instructions;
-	mCurrentFrame->instructionsEnd	= main->instructionsEnd;
-	mCurrentFrame->ip				= main->instructions;
-	mCurrentFrame->thisObject		= nullptr;
+	mStack.push_back(main);
 	
-	mCurrentFrame->variables.resize( main->localVariablesCount );
-	
-	auto& mapping = *main->closureMapping;
-	unsigned closureSize = mapping.size();
-	
-	if( closureSize > 0 )
-	{
-		main->boxes.resize(closureSize);
-		
-		for( unsigned i = 0; i < closureSize; ++i )
-		{
-			Box* box = mMemoryManager.NewBox();
-			main->boxes[i] = box;
-			mCurrentFrame->variables[ mapping[i].toIndex ] = box;
-		}
-	}
-	
-	RunCode();
+	Call(0);
 	
 	if( HasError() )
 	{
@@ -68,6 +41,8 @@ void VirtualMachine::Execute(const char* bytecode)
 			printf("\n");
 		}
 	}
+	
+	mStackFrames.clear(); // TODO: obsolete?
 
 	GarbageCollect();
 }
@@ -96,7 +71,7 @@ void VirtualMachine::GarbageCollect(int steps)
 
 void VirtualMachine::SetError(const char* format, ...)
 {
-	mCurrentFrame->errorState = ES_Error;
+	mStackFrames.back().errorState = ES_Error;
 	
 	char buffer[256];
 	int charsWritten = 0;
@@ -110,11 +85,6 @@ void VirtualMachine::SetError(const char* format, ...)
 	buffer[charsWritten] = '\0';
 	
 	mErrorMessage = std::string(buffer, charsWritten);
-}
-
-void VirtualMachine::PropagateError()
-{
-	mCurrentFrame->errorState = ES_Propagated;
 }
 
 bool VirtualMachine::HasError() const
@@ -175,8 +145,10 @@ int VirtualMachine::GetGlobalIndex(const std::string& name) const
 
 Value VirtualMachine::GetGlobal(int index) const
 {
-	auto it = mGlobalVariables.find( index );
-	return it != mGlobalVariables.end() ? it->second : Value();
+	if( index >= 0 && index < int(mGlobals.size()) )
+		return mGlobals[index];
+
+	return Value();
 }
 
 Value VirtualMachine::GetMember(Value& object, const std::string& memberName)
@@ -205,12 +177,12 @@ Value VirtualMachine::CallFunction(const std::string& name, const std::vector<Va
 	if( index < 0 ) // not found
 		return Value();
 	
-	return CallFunction(mGlobalVariables[index], args);
+	return CallFunction(GetGlobal(index), args);
 }
 
 Value VirtualMachine::CallFunction(int index, const std::vector<Value>& args)
 {
-	return CallFunction(mGlobalVariables[index], args);
+	return CallFunction(GetGlobal(index), args);
 }
 
 Value VirtualMachine::CallFunction(const Value& function, const std::vector<Value>& args)
@@ -226,14 +198,7 @@ Value VirtualMachine::CallFunction(const Value& function, const std::vector<Valu
 	}
 	else // normal function
 	{
-		mStackFrames.emplace_back(); // push safety frame
-		mCurrentFrame = &mStackFrames.back();
-		
 		Call( int(args.size()) );
-		RunCode();
-		
-		mStackFrames.pop_back(); // pop safety frame
-		mCurrentFrame = &mStackFrames.back();
 	}
 	
 	Value result = mStack.back();
@@ -270,16 +235,9 @@ Value VirtualMachine::CallMemberFunction(const Value& object, const Value& funct
 	}
 	else // normal function
 	{
-		mStackFrames.emplace_back(); // push safety frame
-		mCurrentFrame = &mStackFrames.back();
-		
 		mLastObject = object.object;
 		
 		Call(int(args.size()));
-		RunCode();
-		
-		mStackFrames.pop_back(); // pop safety frame
-		mCurrentFrame = &mStackFrames.back();
 	}
 
 	Value result = mStack.back();
@@ -370,7 +328,7 @@ int VirtualMachine::ParseBytecode(const char* bytecode)
 			break;
 		}
 		
-		case Constant::CT_CodeSegment:
+		case Constant::CT_CodeObject:
 		{
 			unsigned* uintp = (unsigned*)((Constant::Type*)constant + 1);
 			unsigned closureSize = *uintp;
@@ -385,44 +343,35 @@ int VirtualMachine::ParseBytecode(const char* bytecode)
 			int namedParametersCount = *intp;
 			++intp;
 			
-			AskedVariable* mapping = nullptr;
-			Instruction* instructions = nullptr;
-			std::pair<int,int>* lines = nullptr;
+			int*			closureMapping	= nullptr;
+			Instruction*	instructions	= nullptr;
+			SourceCodeLine*	lines			= nullptr;
 			
 			if( closureSize > 0 )
 			{
-				mapping = (AskedVariable*)intp;
-				instructions = (Instruction*)(mapping + closureSize);
+				closureMapping = intp;
+				instructions = (Instruction*)(closureMapping + closureSize);
 			}
 			else // no closure, just instructions
 			{
 				instructions = (Instruction*)intp;
 			}
 			
-			lines = (std::pair<int,int>*)(instructions + instructionsSize);
+			lines = (SourceCodeLine*)(instructions + instructionsSize);
+			
+			mConstantCodeObjects.emplace_back(	instructions,
+												instructionsSize,
+												lines,
+												linesSize,
+												localVariablesCount,
+												namedParametersCount );
+			
+			CodeObject* codeObject = &mConstantCodeObjects.back();
 			
 			if( closureSize > 0 )
-			{
-				mCodeObjects.emplace_back(	instructions,
-											instructionsSize,
-											mapping,
-											closureSize,
-											lines,
-											linesSize,
-											localVariablesCount,
-											namedParametersCount );
-			}
-			else
-			{
-				mCodeObjects.emplace_back(	instructions,
-											instructionsSize,
-											lines,
-											linesSize,
-											localVariablesCount,
-											namedParametersCount );
-			}
+				codeObject->closureMapping.assign(closureMapping, closureMapping + closureSize);
 			
-			mConstantFunctions.emplace_back( &mCodeObjects.back() );
+			mConstantFunctions.emplace_back( codeObject );
 			
 			mConstantFunctions.back().state = GarbageCollected::GC_Static;
 			
@@ -445,21 +394,21 @@ int VirtualMachine::ParseBytecode(const char* bytecode)
 	return firstFunctionConstantIndex;
 }
 
-void VirtualMachine::RunCode()
+void VirtualMachine::RunCodeForFrame(Frame* frame)
 {
-	while( mCurrentFrame->ip < mCurrentFrame->instructionsEnd )
+	while( true )
 	{
-		switch( mCurrentFrame->ip->opCode )
+		switch( frame->ip->opCode )
 		{
 		case OC_Pop: // pop TOS
 			mStack.pop_back();
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		
 		case OC_PopN: // pop A values from the stack
-			for( int i = mCurrentFrame->ip->A; i > 0; --i )
+			for( int i = frame->ip->A; i > 0; --i )
 				mStack.pop_back();
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		
 		case OC_Rotate2: // swap TOS and TOS1
@@ -468,7 +417,7 @@ void VirtualMachine::RunCode()
 			Value value = mStack[tos - 1];
 			mStack[tos - 1] = mStack[tos];
 			mStack[tos] = value;
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -477,77 +426,88 @@ void VirtualMachine::RunCode()
 			int tos = int(mStack.size()) - 1;
 			mStack[tos - 2] = mStack[tos];
 			mStack.pop_back();
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
-		
+				
 		case OC_LoadConstant: // A is the index in the constants vector
-			mStack.push_back( mConstants[ mCurrentFrame->ip->A ] );
-			++mCurrentFrame->ip;
+			mStack.push_back( mConstants[ frame->ip->A ] );
+			++frame->ip;
 			break;
 		
 		case OC_LoadLocal: // A is the index in the function scope
+			mStack.push_back( frame->variables[ frame->ip->A ] );
+			++frame->ip;
+			break;
+		
+		case OC_LoadGlobal: // A is the index in the global scope
 		{
-			mStack.push_back( mCurrentFrame->variables[ mCurrentFrame->ip->A ] );
-			++mCurrentFrame->ip;
+			unsigned index = unsigned(frame->ip->A);
+			mStack.push_back( index < mGlobals.size() ? mGlobals[index] : Value() );
+			++frame->ip;
 			break;
 		}
 		
-		case OC_LoadGlobal: // A is the index in the global scope
-			mStack.push_back( mGlobalVariables[ mCurrentFrame->ip->A ] );
-			++mCurrentFrame->ip;
-			break;
-		
 		case OC_LoadNative: // A is the index in the native functions
-			mStack.push_back( mNativeFunctions[ mCurrentFrame->ip->A ] );
-			++mCurrentFrame->ip;
+			mStack.push_back( mNativeFunctions[ frame->ip->A ] );
+			++frame->ip;
 			break;
 		
 		case OC_LoadArgument: // A is the index in the arguments array
-			if( int(mCurrentFrame->anonymousParameters.elements.size()) > mCurrentFrame->ip->A )
-				mStack.push_back( mCurrentFrame->anonymousParameters.elements[ mCurrentFrame->ip->A ] );
+			if( int(frame->anonymousParameters.elements.size()) > frame->ip->A )
+				mStack.push_back( frame->anonymousParameters.elements[ frame->ip->A ] );
 			else
 				mStack.emplace_back();
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		
-		case OC_LoadArgsArray: // load the current mCurrentFrame's arguments array
+		case OC_LoadArgsArray: // load the current frame's arguments array
 			mStack.emplace_back();
 			mStack.back().type = Value::VT_Array;
-			mStack.back().array = &mCurrentFrame->anonymousParameters;
-			++mCurrentFrame->ip;
+			mStack.back().array = &frame->anonymousParameters;
+			++frame->ip;
 			break;
 		
 		case OC_LoadThis: // load the current frame's this object
-			mStack.emplace_back( mCurrentFrame->thisObject ? mCurrentFrame->thisObject : Value() );
-			++mCurrentFrame->ip;
+			mStack.emplace_back( frame->thisObject ? frame->thisObject : Value() );
+			++frame->ip;
 			break;
 		
 		case OC_StoreLocal: // A is the index in the function scope
-			mCurrentFrame->variables[ mCurrentFrame->ip->A ] = mStack.back();
-			++mCurrentFrame->ip;
+			frame->variables[ frame->ip->A ] = mStack.back();
+			++frame->ip;
 			break;
 		
 		case OC_StoreGlobal: // A is the index in the global scope
-			mGlobalVariables[ mCurrentFrame->ip->A ] = mStack.back();
-			++mCurrentFrame->ip;
+		{
+			unsigned index = unsigned(frame->ip->A);
+			if( index >= mGlobals.size() )
+				mGlobals.resize(index + 1);
+			mGlobals[index] = mStack.back();
+			++frame->ip;
 			break;
+		}
 		
 		case OC_PopStoreLocal: // A is the index in the function scope
-			mCurrentFrame->variables[ mCurrentFrame->ip->A ] = mStack.back();
+			frame->variables[ frame->ip->A ] = mStack.back();
 			mStack.pop_back();
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		
 		case OC_PopStoreGlobal: // A is the index in the global scope
-			mGlobalVariables[ mCurrentFrame->ip->A ] = mStack.back();
+		{
+			unsigned index = unsigned(frame->ip->A);
+			if( index >= mGlobals.size() )
+				mGlobals.resize(index + 1);
+			mGlobals[index] = mStack.back();
 			mStack.pop_back();
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
+		}
 		
 		case OC_MakeArray: // A is number of elements to be taken from the stack
 		{
-			int elementsCount = mCurrentFrame->ip->A;
+			int elementsCount = frame->ip->A;
 			
 			Array* array = mMemoryManager.NewArray();
 			array->elements.resize(elementsCount);
@@ -560,7 +520,7 @@ void VirtualMachine::RunCode()
 			
 			mStack.emplace_back(array);
 			
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -569,7 +529,7 @@ void VirtualMachine::RunCode()
 			if( ! mStack.back().IsInt() )
 			{
 				SetError("Array index must be an integer");
-				break;
+				return;
 			}
 			
 			int index = mStack.back().AsInt();
@@ -578,14 +538,14 @@ void VirtualMachine::RunCode()
 			if( ! mStack.back().IsArray() )
 			{
 				SetError("Attempt to index a non-array value");
-				break;
+				return;
 			}
 			
 			const Array* array = mStack.back().array;
 			mStack.pop_back();
 			mStack.emplace_back(); // the value to get
 			LoadElementFromArray(array, index, &mStack.back());
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -594,7 +554,7 @@ void VirtualMachine::RunCode()
 			if( ! mStack.back().IsInt() )
 			{
 				SetError("Array index must be an integer");
-				break;
+				return;
 			}
 			
 			int index = mStack.back().AsInt();
@@ -603,13 +563,13 @@ void VirtualMachine::RunCode()
 			if( ! mStack.back().IsArray() )
 			{
 				SetError("Attempt to index a non-array value");
-				break;
+				return;
 			}
 			
 			Array* array = mStack.back().array;
 			mStack.pop_back();
 			StoreElementInArray(array, index, &mStack.back());
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -618,7 +578,7 @@ void VirtualMachine::RunCode()
 			if( ! mStack.back().IsInt() )
 			{
 				SetError("Array index must be an integer");
-				break;
+				return;
 			}
 			
 			int index = mStack.back().AsInt();
@@ -627,14 +587,14 @@ void VirtualMachine::RunCode()
 			if( ! mStack.back().IsArray() )
 			{
 				SetError("Attempt to index a non-array value");
-				break;
+				return;
 			}
 			
 			Array* array = mStack.back().array;
 			mStack.pop_back();
 			StoreElementInArray(array, index, &mStack.back());
 			mStack.pop_back();
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -652,9 +612,10 @@ void VirtualMachine::RunCode()
 			else
 			{
 				SetError("Invalid arguments for operator <<");
+				return;
 			}
 			
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 
@@ -672,21 +633,23 @@ void VirtualMachine::RunCode()
 				}
 				else
 				{
-					SetError("Popping from an empty array");
+					SetError("Popping from an empty array"); // TODO: non-fatal error?
+					return;
 				}
 			}
 			else
 			{
 				SetError("Invalid arguments for operator >>");
+				return;
 			}
 			
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 				
 		case OC_MakeObject: // A is number of key-value pairs to be taken from the stack
 		{
-			int membersCount = mCurrentFrame->ip->A;
+			int membersCount = frame->ip->A;
 			
 			Object* object = mMemoryManager.NewObject();
 			object->members.resize(membersCount);
@@ -706,7 +669,7 @@ void VirtualMachine::RunCode()
 			
 			mStack.emplace_back(object);
 			
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -719,13 +682,13 @@ void VirtualMachine::RunCode()
 			
 			mStack.emplace_back(object);
 			
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
 		case OC_LoadHash: // H is the hash to load on the stack
-			mStack.emplace_back( mCurrentFrame->ip->H );
-			++mCurrentFrame->ip;
+			mStack.emplace_back( frame->ip->H );
+			++frame->ip;
 			break;
 		
 		case OC_LoadMember: // TOS is the member hash in the TOS1 object
@@ -736,14 +699,14 @@ void VirtualMachine::RunCode()
 			if( ! mStack.back().IsObject() )
 			{
 				SetError("Attempt to access a member of a non-object value");
-				break;
+				return;
 			}
 			
 			mLastObject = mStack.back().object;
 			mStack.pop_back();
 			mStack.emplace_back(); // the value to get
 			LoadMemberFromObject(mLastObject, hash, &mStack.back());
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -755,13 +718,13 @@ void VirtualMachine::RunCode()
 			if( ! mStack.back().IsObject() )
 			{
 				SetError("Attempt to access a member of a non-object value");
-				break;
+				return;
 			}
 			
 			Object* object = mStack.back().object;
 			mStack.pop_back();
 			StoreMemberInObject(object, hash, &mStack.back());
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -773,14 +736,14 @@ void VirtualMachine::RunCode()
 			if( ! mStack.back().IsObject() )
 			{
 				SetError("Attempt to access a member of a non-object value");
-				break;
+				return;
 			}
 			
 			Object* object = mStack.back().object;
 			mStack.pop_back();
 			StoreMemberInObject(object, hash, &mStack.back());
 			mStack.pop_back();
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -806,10 +769,10 @@ void VirtualMachine::RunCode()
 			else if( ! mStack.back().IsObject() )
 			{
 				SetError("A generator value must be an object");
-				break;
+				return;
 			}
 			// else lets hope its a proper generator object
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -818,7 +781,7 @@ void VirtualMachine::RunCode()
 			if( mStack.back().IsNativeGenerator() )
 			{
 				mStack.emplace_back( mStack.back().nativeGenerator->implementation->has_value() );
-				++mCurrentFrame->ip;
+				++frame->ip;
 			}
 			else // user defined generator object
 			{
@@ -829,18 +792,22 @@ void VirtualMachine::RunCode()
 				if( ! mStack.back().IsFunction() )
 				{
 					SetError("No 'has_value' function found in generator object");
-					break;
+					return;
 				}
 				
 				if( mStack.back().type == Value::VT_NativeFunction )
 				{
 					CallNative(0);
-					++mCurrentFrame->ip;
 				}
 				else // normal function
 				{
 					Call(0);
 				}
+				
+				if( HasError() )
+					return;
+				
+				++frame->ip;
 			}
 			break;
 		}
@@ -850,7 +817,7 @@ void VirtualMachine::RunCode()
 			if( mStack.back().IsNativeGenerator() )
 			{
 				mStack.emplace_back(mStack.back().nativeGenerator->implementation->next_value());
-				++mCurrentFrame->ip;
+				++frame->ip;
 			}
 			else // user defined generator object
 			{
@@ -861,30 +828,42 @@ void VirtualMachine::RunCode()
 				if( ! mStack.back().IsFunction() )
 				{
 					SetError("No 'next_value' function found in generator object");
-					break;
+					return;
 				}
 				
 				if( mStack.back().type == Value::VT_NativeFunction )
 				{
 					CallNative(0);
-					++mCurrentFrame->ip;
 				}
 				else // normal function
 				{
 					Call(0);
 				}
+				
+				if( HasError() )
+					return;
+				
+				++frame->ip;
 			}
 			break;
 		}
 		
+		case OC_MakeBox: // A is the index of the box that needs to be created
+		{
+			Value& variable = frame->variables[ frame->ip->A ];
+			variable = mMemoryManager.NewBox( variable );
+			++frame->ip;
+			break;
+		}
+		
 		case OC_LoadFromBox: // load the value stored in the box at index A
-			mStack.emplace_back( mCurrentFrame->variables[ mCurrentFrame->ip->A ].box->value );
-			++mCurrentFrame->ip;
+			mStack.emplace_back( frame->variables[ frame->ip->A ].box->value );
+			++frame->ip;
 			break;
 		
 		case OC_StoreToBox: // A is the index of the box that holds the value
 		{
-			Box* box = mCurrentFrame->variables[ mCurrentFrame->ip->A ].box;
+			Box* box = frame->variables[ frame->ip->A ].box;
 			Value& newValue = mStack.back();
 			
 			box->value = newValue;
@@ -898,13 +877,13 @@ void VirtualMachine::RunCode()
 				mMemoryManager.MakeGray(newValue.garbageCollected);
 			}
 			
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
 		case OC_PopStoreToBox: // A is the index of the box that holds the value
 		{
-			Box* box = mCurrentFrame->variables[ mCurrentFrame->ip->A ].box;
+			Box* box = frame->variables[ frame->ip->A ].box;
 			Value& newValue = mStack.back();
 			
 			box->value = newValue;
@@ -919,51 +898,94 @@ void VirtualMachine::RunCode()
 			}
 			
 			mStack.pop_back();
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
-		case OC_MakeClosure: // A is the number of boxed locals, TOS is the function object
+		case OC_MakeClosure: // Create a closure from the function object at TOS and replace it
 		{
-			int boxesCount = mCurrentFrame->ip->A;
-			
-			// copy the reference to the code object
 			Function* newFunction = mMemoryManager.NewFunction( mStack.back().function );
 			
-			mStack.pop_back();
-			mStack.emplace_back(newFunction);
+			const std::vector<int>& closureMapping = newFunction->codeObject->closureMapping;
 			
-			const auto& closureMapping = *newFunction->closureMapping;
-			newFunction->boxes.resize(boxesCount);
+			newFunction->freeVariables.reserve( closureMapping.size() );
 			
-			for( int i = 0; i < boxesCount; ++i )
+			for( int indexToBox : closureMapping )
 			{
-				if( closureMapping[i].fromIndex == -1 )
-					newFunction->boxes[i] = nullptr;  // to be allocated on call
-				else // refer to box
-					newFunction->boxes[i] = mCurrentFrame->variables[ closureMapping[i].fromIndex ].box;
+				if( indexToBox >= 0 )
+					newFunction->freeVariables.push_back( frame->variables[ indexToBox ].box );
+				else // from a free variable
+					newFunction->freeVariables.push_back( frame->function->freeVariables[ -indexToBox - 1 ] );
 			}
 			
-			++mCurrentFrame->ip;
+			mStack.back() = Value(newFunction);
+			
+			++frame->ip;
+			break;
+		}
+		
+		case OC_LoadFromClosure: // load the value of the free variable inside the closure at index A
+			mStack.emplace_back( frame->function->freeVariables[ frame->ip->A ]->value );
+			++frame->ip;
+			break;
+			
+		case OC_StoreToClosure: // A is the index of the free variable inside the closure
+		{
+			Box* box = frame->function->freeVariables[ frame->ip->A ];
+			Value& newValue = mStack.back();
+			
+			box->value = newValue;
+			
+			// the tri-color invariant states that at no point shall
+			// a black node be directly connected to a white node
+			if( box->state == GarbageCollected::GC_Black &&
+				newValue.IsGarbageCollected() &&
+				newValue.garbageCollected->state == mMemoryManager.GetCurrentWhite() )
+			{
+				mMemoryManager.MakeGray(newValue.garbageCollected);
+			}
+			
+			++frame->ip;
+			break;
+		}
+		
+		case OC_PopStoreToClosure: // A is the index of the free variable inside the closure
+		{
+			Box* box = frame->function->freeVariables[ frame->ip->A ];
+			Value& newValue = mStack.back();
+			
+			box->value = newValue;
+			
+			// the tri-color invariant states that at no point shall
+			// a black node be directly connected to a white node
+			if( box->state == GarbageCollected::GC_Black &&
+				newValue.IsGarbageCollected() &&
+				newValue.garbageCollected->state == mMemoryManager.GetCurrentWhite() )
+			{
+				mMemoryManager.MakeGray(newValue.garbageCollected);
+			}
+			
+			mStack.pop_back();
+			++frame->ip;
 			break;
 		}
 		
 		case OC_Jump: // jump to A
-			mCurrentFrame->ip = &mCurrentFrame->instructions[ mCurrentFrame->ip->A ];
+			frame->ip = &frame->instructions[ frame->ip->A ];
 			break;
 		
 		case OC_JumpIfFalse: // jump to A, if TOS is false
 			if( mStack.back().AsBool() )
-				++mCurrentFrame->ip;
+				++frame->ip;
 			else
-				mCurrentFrame->ip = &mCurrentFrame->instructions[ mCurrentFrame->ip->A ];
+				frame->ip = &frame->instructions[ frame->ip->A ];
 			break;
 		
 		case OC_PopJumpIfFalse: // jump to A, if TOS is false, pop TOS either way
 			if( mStack.back().AsBool() )
-				++mCurrentFrame->ip;
+				++frame->ip;
 			else
-				mCurrentFrame->ip = &mCurrentFrame->instructions[ mCurrentFrame->ip->A ];
+				frame->ip = &frame->instructions[ frame->ip->A ];
 			mStack.pop_back();
 			break;
 		
@@ -971,23 +993,23 @@ void VirtualMachine::RunCode()
 			if( mStack.back().AsBool() )
 			{
 				mStack.pop_back();
-				++mCurrentFrame->ip;
+				++frame->ip;
 			}
 			else
 			{
-				mCurrentFrame->ip = &mCurrentFrame->instructions[ mCurrentFrame->ip->A ];
+				frame->ip = &frame->instructions[ frame->ip->A ];
 			}
 			break;
 		
 		case OC_JumpIfTrueOrPop: // jump to A, if TOS is true, otherwise pop TOS (or-op)
 			if( mStack.back().AsBool() )
 			{
-				mCurrentFrame->ip = &mCurrentFrame->instructions[ mCurrentFrame->ip->A ];
+				frame->ip = &frame->instructions[ frame->ip->A ];
 			}
 			else
 			{
 				mStack.pop_back();
-				++mCurrentFrame->ip;
+				++frame->ip;
 			}
 			break;
 		
@@ -995,37 +1017,26 @@ void VirtualMachine::RunCode()
 			if( ! mStack.back().IsFunction() )
 			{
 				SetError("Attempt to call a non-function value");
-				break;
+				return;
 			}
 			
 			if( mStack.back().type == Value::VT_NativeFunction )
 			{
-				CallNative( mCurrentFrame->ip->A );
-				++mCurrentFrame->ip;
+				CallNative( frame->ip->A );
 			}
 			else // normal function
 			{
-				Call( mCurrentFrame->ip->A );
+				Call( frame->ip->A );
 			}
+			
+			if( HasError() )
+				return;
+			
+			++frame->ip;
 			break;
 		
-		case OC_EndFunction: // pop function scope, restore previous mCurrentFrame
-		{
-			Function* function = mStackFrames.back().function;
-			
-			if( std::vector<AskedVariable>* mapping = function->closureMapping )
-			{
-				unsigned mappingSize = mapping->size();
-				for( unsigned i = 0; i < mappingSize; ++i )
-					if( mapping->at(i).fromIndex == -1 )
-						function->boxes[i] = nullptr;
-			}
-			
-			mStackFrames.pop_back();
-			mCurrentFrame = &mStackFrames.back();
-			++mCurrentFrame->ip;
-			break;
-		}
+		case OC_EndFunction: // end function sentinel
+			return;
 		
 		case OC_Add:
 		case OC_Subtract:
@@ -1042,17 +1053,20 @@ void VirtualMachine::RunCode()
 		case OC_Greater:
 		case OC_LessEqual:
 		case OC_GreaterEqual:
-			DoBinaryOperation(mCurrentFrame->ip->opCode);
-			++mCurrentFrame->ip;
+			if( ! DoBinaryOperation(frame->ip->opCode) )
+				return;
+			
+			++frame->ip;
 			break;
 		
 		case OC_UnaryPlus:
 			if( ! mStack.back().IsNumber() )
 			{
 				SetError("Unary plus used on a value that is not an integer or float");
-				break;
+				return;
 			}
-			++mCurrentFrame->ip; // do nothing (:
+			
+			++frame->ip; // do nothing (:
 			break;
 		
 		case OC_UnaryMinus:
@@ -1071,9 +1085,10 @@ void VirtualMachine::RunCode()
 			else
 			{
 				SetError("Unary minus used on a value that is not an integer or float");
-				break;
+				return;
 			}
-			++mCurrentFrame->ip;
+			
+			++frame->ip;
 			break;
 			
 		case OC_UnaryNot:
@@ -1081,7 +1096,7 @@ void VirtualMachine::RunCode()
 			bool b = mStack.back().AsBool(); // anything can be turned into a bool
 			mStack.pop_back();
 			mStack.emplace_back(!b);
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -1090,7 +1105,7 @@ void VirtualMachine::RunCode()
 			std::string str = mStack.back().AsString(); // anything can be turned into a string
 			mStack.pop_back();
 			mStack.emplace_back( mMemoryManager.NewString(str) );
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
@@ -1108,63 +1123,108 @@ void VirtualMachine::RunCode()
 			else
 			{
 				SetError("Attempt to get the size of a value that is not an array, object or string");
-				break;
+				return;
 			}
 			
 			mStack.pop_back();
 			mStack.emplace_back(size);
 			
-			++mCurrentFrame->ip;
+			++frame->ip;
 			break;
 		}
 		
 		default:
-			++mCurrentFrame->ip;
-			break;
+			SetError("Invalid OpCode!");
+			return;
+		}
+	}
+}
+
+void VirtualMachine::Call(int argumentsCount)
+{
+	Function* function = mStack.back().function;
+	mStack.pop_back();
+	
+	const CodeObject* codeObject = function->codeObject;
+	
+	// create a new stack frame ////////////////////////////////////////////////
+	mStackFrames.emplace_back();
+	Frame* newFrame = &mStackFrames.back();
+	
+	newFrame->function		= function;
+	newFrame->instructions	= codeObject->instructions.data();
+	newFrame->ip			= newFrame->instructions;
+	newFrame->thisObject	= mLastObject;
+	
+	newFrame->variables.resize( codeObject->localVariablesCount );
+	
+	// bind parameters to local variables //////////////////////////////////////
+	int namedParametersCount = codeObject->namedParametersCount;
+	int anonymousArgumentsCount = argumentsCount - namedParametersCount;
+	
+	if( anonymousArgumentsCount <= 0 )
+	{
+		for( int i = argumentsCount - 1; i >= 0; --i )
+		{
+			newFrame->variables[i] = mStack.back();
+			mStack.pop_back();
+		}
+	}
+	else // we have some anonymous arguments
+	{
+		newFrame->anonymousParameters.elements.resize(anonymousArgumentsCount);
+		
+		for( int i = anonymousArgumentsCount - 1; i >= 0; --i )
+		{
+			newFrame->anonymousParameters.elements[i] = mStack.back();
+			mStack.pop_back();
 		}
 		
-		if( mCurrentFrame->errorState != ES_NoError )
-			break;
+		for( int i = namedParametersCount - 1; i >= 0; --i )
+		{
+			newFrame->variables[i] = mStack.back();
+			mStack.pop_back();
+		}
 	}
 	
-	// unroll the stack frames in case of errors ///////////////////////////////
-	if( mCurrentFrame->errorState != ES_NoError )
+	// execute instructions ////////////////////////////////////////////////////
+	RunCodeForFrame(newFrame);
+	
+	// check and log errors ////////////////////////////////////////////////////
+	if( newFrame->errorState != ES_NoError )
 	{
-		int line = -1;
+		bool fromThisFrame = newFrame->errorState == ES_Error;
+		int line = CurrentLineFromFrame(newFrame);
 		
-		if( mCurrentFrame->errorState != ES_Propagated )
-		{
-			line = CurrentLineFromFrame(mCurrentFrame);
-			
-			mLogger.PushError(line, mErrorMessage.c_str());
-			
-			mStackFrames.pop_back();
-		}
+		mLogger.PushError(line, fromThisFrame ? mErrorMessage.c_str() : "called from here");
 		
-		while( ! mStackFrames.empty() )
-		{
-			// dummy frame means the function was not called by the bytecode
-			if( mStackFrames.back().instructions == nullptr )
-				break;
-			
-			line = CurrentLineFromFrame(&mStackFrames.back());
-			mLogger.PushError(line, "called from here");
-			
-			mStackFrames.pop_back();
-		}
-		
-		if( ! mStackFrames.empty() )
-			mCurrentFrame = &mStackFrames.back();
-		else
-			mCurrentFrame = nullptr;
+		unsigned stackSize = mStackFrames.size();
+
+		if( stackSize >= 2 )
+			mStackFrames[stackSize - 2].errorState = ES_Propagated;
 	}
 	
-	// let the garbage collector do its thing every now and then ///////////////
-	if( mInstructionsProcessed++ % 100 )
+	// restore previous stack frame ////////////////////////////////////////////
+	mStackFrames.pop_back();
+}
+
+void VirtualMachine::CallNative(int argumentsCount)
+{
+	Value::NativeFunction function = mStack.back().nativeFunction;
+	mStack.pop_back();
+	
+	std::vector<Value> arguments;
+	arguments.resize(argumentsCount);
+	
+	for( int i = argumentsCount - 1; i >= 0; --i )
 	{
-		//if( int steps = mMemoryManager.GarbageCollectionStepsToSchedule() )
-		//	GarbageCollect(steps);
+		arguments[i] = mStack.back();
+		mStack.pop_back();
 	}
+	
+	Value result = function(*this, arguments);
+	
+	mStack.push_back(result);
 }
 
 void VirtualMachine::LoadElementFromArray(const Array* array, int index, Value* outValue) const
@@ -1295,133 +1355,7 @@ void VirtualMachine::StoreMemberInObject(Object* object, unsigned hash, const Va
 	}
 }
 
-void VirtualMachine::Call(int argumentsCount)
-{
-	Function* function = mStack.back().function;
-	mStack.pop_back();
-	
-	mStackFrames.emplace_back();
-	
-	mCurrentFrame = &mStackFrames.back();
-	
-	mCurrentFrame->function			= function;
-	mCurrentFrame->instructions		= function->instructions;
-	mCurrentFrame->instructionsEnd	= function->instructionsEnd;
-	mCurrentFrame->ip				= function->instructions;
-	mCurrentFrame->thisObject		= mLastObject;
-	
-	mCurrentFrame->variables.resize( function->localVariablesCount );
-	
-	int anonymousArgumentsCount = argumentsCount - function->namedParametersCount;
-	
-	const auto& mapping = *function->closureMapping;
-	unsigned closureSize = mapping.size();
-	
-	if( closureSize == 0 )
-	{
-		if( anonymousArgumentsCount <= 0 )
-		{
-			for( int i = argumentsCount - 1; i >= 0; --i )
-			{
-				mCurrentFrame->variables[i] = mStack.back();
-				mStack.pop_back();
-			}
-		}
-		else // we have some anonymous arguments
-		{
-			mCurrentFrame->anonymousParameters.elements.resize(anonymousArgumentsCount);
-			
-			for( int i = anonymousArgumentsCount - 1; i >= 0; --i )
-			{
-				mCurrentFrame->anonymousParameters.elements[i] = mStack.back();
-				mStack.pop_back();
-			}
-			
-			for( int i = function->namedParametersCount - 1; i >= 0; --i )
-			{
-				mCurrentFrame->variables[i] = mStack.back();
-				mStack.pop_back();
-			}
-		}
-	}
-	else // we have a closure
-	{
-		// The tri-color invariant states that at no point shall
-		// a black node be directly connected to a white node.
-		// It will probably be very time consuming to check whether
-		// the boxes of this closure are white or not, so we will just
-		// always mark the whole function as gray and let the garbage
-		// collection cycle take care of the rest.
-		if( function->state == GarbageCollected::GC_Black )
-			mMemoryManager.MakeGray(function);
-		
-		for( unsigned i = 0; i < closureSize; ++i )
-		{
-			if( mapping[i].fromIndex == -1 ) // allocate a new box
-				function->boxes[i] = mMemoryManager.NewBox();
-			
-			mCurrentFrame->variables[ mapping[i].toIndex ] = function->boxes[i];
-		}
-		
-		if( anonymousArgumentsCount <= 0 )
-		{
-			for( int i = argumentsCount - 1; i >= 0; --i )
-			{
-				Value& variable = mCurrentFrame->variables[i];
-				
-				if( ! variable.IsBox() )
-					variable = mStack.back();
-				else // write to the box
-					variable.box->value = mStack.back();
-				
-				mStack.pop_back();
-			}
-		}
-		else // we have some anonymous arguments
-		{
-			mCurrentFrame->anonymousParameters.elements.resize(anonymousArgumentsCount);
-			
-			for( int i = anonymousArgumentsCount - 1; i >= 0; --i )
-			{
-				mCurrentFrame->anonymousParameters.elements[i] = mStack.back();
-				mStack.pop_back();
-			}
-			
-			for( int i = function->namedParametersCount - 1; i >= 0; --i )
-			{
-				Value& variable = mCurrentFrame->variables[i];
-				
-				if( ! variable.IsBox() )
-					variable = mStack.back();
-				else // write to the box
-					variable.box->value = mStack.back();
-				
-				mStack.pop_back();
-			}
-		}
-	}
-}
-
-void VirtualMachine::CallNative(int argumentsCount)
-{
-	Value::NativeFunction function = mStack.back().nativeFunction;
-	mStack.pop_back();
-	
-	std::vector<Value> arguments;
-	arguments.resize(argumentsCount);
-	
-	for( int i = argumentsCount - 1; i >= 0; --i )
-	{
-		arguments[i] = mStack.back();
-		mStack.pop_back();
-	}
-	
-	Value result = function(*this, arguments);
-	
-	mStack.push_back(result);
-}
-
-void VirtualMachine::DoBinaryOperation(int opCode)
+bool VirtualMachine::DoBinaryOperation(int opCode)
 {
 	unsigned last = mStack.size() - 1;
 	Value& lhs = mStack[last - 1];
@@ -1470,6 +1404,7 @@ void VirtualMachine::DoBinaryOperation(int opCode)
 			else
 			{
 				SetError("Invalid arguments for operator +");
+				return false;
 			}
 			break;
 		}
@@ -1486,6 +1421,7 @@ void VirtualMachine::DoBinaryOperation(int opCode)
 			else
 			{
 				SetError("Invalid arguments for operator -");
+				return false;
 			}
 			break;
 		}
@@ -1502,6 +1438,7 @@ void VirtualMachine::DoBinaryOperation(int opCode)
 			else
 			{
 				SetError("Invalid arguments for operator *");
+				return false;
 			}
 			break;
 		}
@@ -1522,6 +1459,7 @@ void VirtualMachine::DoBinaryOperation(int opCode)
 			else
 			{
 				SetError("Invalid arguments for operator /");
+				return false;
 			}
 			break;
 		}
@@ -1538,6 +1476,7 @@ void VirtualMachine::DoBinaryOperation(int opCode)
 			else
 			{
 				SetError("Invalid arguments for operator ^");
+				return false;
 			}
 			break;
 		}
@@ -1545,9 +1484,14 @@ void VirtualMachine::DoBinaryOperation(int opCode)
 		case OC_Modulo:
 		{
 			if( lhs.IsNumber() && rhs.IsNumber() )
+			{
 				result = Value( lhs.AsInt() % rhs.AsInt() );
+			}
 			else
+			{
 				SetError("Invalid arguments for operator %");
+				return false;
+			}
 			break;
 		}
 		
@@ -1604,6 +1548,7 @@ void VirtualMachine::DoBinaryOperation(int opCode)
 			else
 			{
 				SetError("Invalid arguments for operator <");
+				return false;
 			}
 			break;
 		}
@@ -1620,6 +1565,7 @@ void VirtualMachine::DoBinaryOperation(int opCode)
 			else
 			{
 				SetError("Invalid arguments for operator >");
+				return false;
 			}
 			break;
 		}
@@ -1636,6 +1582,7 @@ void VirtualMachine::DoBinaryOperation(int opCode)
 			else
 			{
 				SetError("Invalid arguments for operator <=");
+				return false;
 			}
 			break;
 		}
@@ -1652,6 +1599,7 @@ void VirtualMachine::DoBinaryOperation(int opCode)
 			else
 			{
 				SetError("Invalid arguments for operator >=");
+				return false;
 			}
 			break;
 		}
@@ -1660,26 +1608,28 @@ void VirtualMachine::DoBinaryOperation(int opCode)
 	mStack.pop_back();
 	mStack.pop_back();
 	mStack.push_back(result);
+	
+	return true;
 }
 
 int VirtualMachine::CurrentLineFromFrame(const Frame* frame) const
 {
-	const auto& lines = *frame->function->instructionLines;
+	const auto& lines = frame->function->codeObject->instructionLines;
 	
 	if( lines.empty() )
 		return -1;
 	
 	if( lines.size() == 1 )
-		return lines.back().first;
+		return lines.back().line;
 	
-	int instructionIndex = frame->ip - frame->function->instructions;
+	int instructionIndex = frame->ip - frame->function->codeObject->instructions.data();
 	
 	int lineIndex = -1;
 	
-	for( const std::pair<int, int>& line : lines )
+	for( const SourceCodeLine& line : lines )
 	{
-		if( instructionIndex >= line.second )
-			lineIndex = line.first;
+		if( instructionIndex >= line.instructionIndex )
+			lineIndex = line.line;
 		else
 			return lineIndex;
 	}
@@ -1689,9 +1639,9 @@ int VirtualMachine::CurrentLineFromFrame(const Frame* frame) const
 
 void VirtualMachine::AddRootsToGrayList()
 {
-	for( auto& kvp : mGlobalVariables )
-		if( kvp.second.IsGarbageCollected() && kvp.second.IsWhite() )
-			mMemoryManager.MakeGray(kvp.second.garbageCollected);
+	for( Value& global : mGlobals )
+		if( global.IsGarbageCollected() && global.IsWhite() )
+			mMemoryManager.MakeGray(global.garbageCollected);
 	
 	for( Frame& frame : mStackFrames )
 	{

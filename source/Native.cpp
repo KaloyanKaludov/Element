@@ -89,10 +89,7 @@ Value ThisCall(VirtualMachine& vm, std::vector<Value>& args)
 	std::vector<Value> thisCallArgs(args.begin() + 2, args.end());
 		
 	Value result = vm.CallMemberFunction(thisObject, function, thisCallArgs);
-	
-	if( vm.HasError() )
-		vm.PropagateError();
-	
+		
 	return result;
 }
 
@@ -344,10 +341,7 @@ Value Each(VirtualMachine& vm, std::vector<Value>& args)
 			vm.CallFunction(function, {array[i], i});
 			
 			if( vm.HasError() )
-			{
-				vm.PropagateError();
 				return Value();
-			}
 		}
 	}
 	else if( args[0].IsNativeGenerator() )
@@ -359,10 +353,7 @@ Value Each(VirtualMachine& vm, std::vector<Value>& args)
 			vm.CallFunction(function, {generator->implementation->next_value()});
 			
 			if( vm.HasError() )
-			{
-				vm.PropagateError();
 				return Value();
-			}
 		}
 	}
 	else if( args[0].IsObject() )
@@ -388,26 +379,17 @@ Value Each(VirtualMachine& vm, std::vector<Value>& args)
 		while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
 		{
 			if( vm.HasError() )
-			{
-				vm.PropagateError();
 				return Value();
-			}
 			
 			Value nextValue = vm.CallMemberFunction(object, next_value, {});
 			
 			if( vm.HasError() )
-			{
-				vm.PropagateError();
 				return Value();
-			}
 			
 			vm.CallFunction(function, {nextValue});
 			
 			if( vm.HasError() )
-			{
-				vm.PropagateError();
 				return Value();
-			}
 		}
 	}
 	else
@@ -446,10 +428,7 @@ Value Times(VirtualMachine& vm, std::vector<Value>& args)
 		vm.CallFunction(function, {i});
 		
 		if( vm.HasError() )
-		{
-			vm.PropagateError();
 			return Value();
-		}
 	}
 	
 	return Value();
@@ -485,10 +464,7 @@ Value Count(VirtualMachine& vm, std::vector<Value>& args)
 		Value result = vm.CallFunction(function, {element});
 		
 		if( vm.HasError() )
-		{
-			vm.PropagateError();
 			return Value();
-		}
 		
 		if( result.AsBool() )
 			++counter;
@@ -530,10 +506,7 @@ Value Map(VirtualMachine& vm, std::vector<Value>& args)
 		result.array->elements.push_back( vm.CallFunction(function, {array[i], i}) );
 		
 		if( vm.HasError() )
-		{
-			vm.PropagateError();
 			return Value();
-		}
 	}
 	
 	return result;
@@ -570,10 +543,7 @@ Value Filter(VirtualMachine& vm, std::vector<Value>& args)
 		bool include = vm.CallFunction(function, {array[i], i}).AsBool();
 		
 		if( vm.HasError() )
-		{
-			vm.PropagateError();
 			return Value();
-		}
 		
 		if( include )
 			result.array->elements.push_back(array[i]);
@@ -614,10 +584,7 @@ Value Reduce(VirtualMachine& vm, std::vector<Value>& args)
 				result = vm.CallFunction(function, {result, array[i]});
 				
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 			}
 		}
 	}
@@ -633,10 +600,7 @@ Value Reduce(VirtualMachine& vm, std::vector<Value>& args)
 			result = vm.CallFunction(function, {result, generator->implementation->next_value()});
 			
 			if( vm.HasError() )
-			{
-				vm.PropagateError();
 				return Value();
-			}
 		}
 	}
 	else if( args[0].IsObject() )
@@ -662,43 +626,28 @@ Value Reduce(VirtualMachine& vm, std::vector<Value>& args)
 		if( vm.CallMemberFunction(object, has_value, {}).AsBool() )
 		{
 			if( vm.HasError() )
-			{
-				vm.PropagateError();
 				return Value();
-			}
 			
 			result = vm.CallMemberFunction(object, next_value, {});
 			
 			if( vm.HasError() )
-			{
-				vm.PropagateError();
 				return Value();
-			}
 		}
 		
 		while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
 		{
 			if( vm.HasError() )
-			{
-				vm.PropagateError();
 				return Value();
-			}
 			
 			Value nextValue = vm.CallMemberFunction(object, next_value, {});
 			
 			if( vm.HasError() )
-			{
-				vm.PropagateError();
 				return Value();
-			}
 			
 			result = vm.CallFunction(function, {result, nextValue});
 			
 			if( vm.HasError() )
-			{
-				vm.PropagateError();
 				return Value();
-			}
 		}
 	}
 	else
@@ -747,10 +696,7 @@ Value All(VirtualMachine& vm, std::vector<Value>& args)
 				result = vm.CallFunction(function, {element});
 
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
-					return Value();
-				}
+				return Value();
 
 				if( !result.AsBool() )
 					return false;
@@ -792,10 +738,7 @@ Value All(VirtualMachine& vm, std::vector<Value>& args)
 				result = vm.CallFunction(function, {generator->implementation->next_value()});
 
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				if( !result.AsBool() )
 					return false;
@@ -834,18 +777,12 @@ Value All(VirtualMachine& vm, std::vector<Value>& args)
 			while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
 			{
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				Value nextValue = vm.CallMemberFunction(object, next_value, {});
 
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				if( !nextValue.AsBool() )
 					return false;
@@ -866,26 +803,17 @@ Value All(VirtualMachine& vm, std::vector<Value>& args)
 			while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
 			{
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				Value nextValue = vm.CallMemberFunction(object, next_value, {});
 
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				Value result = vm.CallFunction(function, {nextValue});
 
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				if( !result.AsBool() )
 					return false;
@@ -946,10 +874,7 @@ Value Any(VirtualMachine& vm, std::vector<Value>& args)
 				result = vm.CallFunction(function, { element });
 
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				if( result.AsBool() )
 					return true;
@@ -991,10 +916,7 @@ Value Any(VirtualMachine& vm, std::vector<Value>& args)
 				result = vm.CallFunction(function, { generator->implementation->next_value() });
 
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				if( result.AsBool() )
 					return true;
@@ -1033,18 +955,12 @@ Value Any(VirtualMachine& vm, std::vector<Value>& args)
 			while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
 			{
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				Value nextValue = vm.CallMemberFunction(object, next_value, {});
 
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				if( nextValue.AsBool() )
 					return true;
@@ -1065,26 +981,17 @@ Value Any(VirtualMachine& vm, std::vector<Value>& args)
 			while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
 			{
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				Value nextValue = vm.CallMemberFunction(object, next_value, {});
 
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				Value result = vm.CallFunction(function, { nextValue });
 
 				if( vm.HasError() )
-				{
-					vm.PropagateError();
 					return Value();
-				}
 
 				if( result.AsBool() )
 					return true;

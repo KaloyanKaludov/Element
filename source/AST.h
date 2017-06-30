@@ -62,6 +62,20 @@ struct VariableNode : public Node
 	
 	VariableNode(int variableType, const SourceCoords& coords);
 	VariableNode(const std::string& name, const SourceCoords& coords);
+	
+	// Semantic information ////////////////////////////////////////////////////
+	enum SemanticType : char
+	{
+		SMT_Global,			// global variable defined outside of any function or block
+		SMT_Local,			// local to the current function or block
+		SMT_Native,			// global variable that is defined in C/C++
+		SMT_FreeVariable,	// unbound variable that will be determined by the closure
+		SMT_LocalBoxed,		// a free variable will later be bound to this local variable
+	};
+	
+	SemanticType	semanticType;
+	bool			firstOccurrence;
+	int				index;
 };
 
 struct IntegerNode : public Node
@@ -124,6 +138,24 @@ struct FunctionNode : public Node
 				 Node* body, 
 				 const SourceCoords& coords);
 	~FunctionNode();
+	
+	// Semantic information ////////////////////////////////////////////////////
+	int localVariablesCount;
+	std::vector<VariableNode*> referencedVariables;
+	
+	// These are the indices of the variables from the enclosing function scope
+	// during the creation of the closure object. We create a new free variable
+	// for each one of them. If the index is negative this means that it is taken
+	// from the enclosing function scope's closure. Convert it using this formula
+	//    freeVariableIndex = abs(i) - 1
+	std::vector<int> closureMapping;
+	
+	// These are indices of the local variables that represent the function's
+	// parameters. Since they are declared by the FunctionNode there may not be
+	// any references to them by VariableNodes. If that is so, then nothing will
+	// claim the firstOccurrence flag. If there is no firstOccurrence and the
+	// variable is part of a closure, it will still need to be boxed.
+	std::vector<int> parametersToBox;
 };
 
 struct FunctionCallNode : public Node
@@ -177,6 +209,9 @@ struct BlockNode : Node
 	BlockNode(std::vector<Node*>& nodes, 
 			  const SourceCoords& coords);
 	~BlockNode();
+	
+	// Semantic information
+	bool explicitFunctionBlock;
 };
 
 struct IfNode : public Node

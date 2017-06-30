@@ -22,6 +22,7 @@ public:			MemoryManager();
 	Object*		NewObject(const Object* other);
 	Function*	NewFunction(const Function* other);
 	Box*		NewBox();
+	Box*		NewBox(const Value& value);
 	Generator*	NewGeneratorArray(Array* array);
 	Generator*	NewGeneratorString(String* str);
 	Generator*	NewGeneratorNative(GeneratorImplementation* newGenerator);

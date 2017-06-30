@@ -147,6 +147,22 @@ Box* MemoryManager::NewBox()
 	return newBox;
 }
 
+Box* MemoryManager::NewBox(const Value& value)
+{
+	Box* newBox = new Box();
+
+	newBox->value = value;
+	newBox->state = mNextWhite;
+
+	if( mHeapHead )
+		newBox->next = mHeapHead;
+	mHeapHead = newBox;
+
+	++mHeapBoxesCount;
+
+	return newBox;
+}
+
 Generator* MemoryManager::NewGeneratorArray(Array* array)
 {
 	Generator* newGenerator = new Generator(new ArrayGenerator(array));
@@ -194,7 +210,7 @@ Generator* MemoryManager::NewGeneratorNative(GeneratorImplementation* newGenerat
 
 int MemoryManager::GarbageCollectionStepsToSchedule()
 {
-	if( ! mGarbageCollectionEnabled )
+	if( ! IsGarbageCollectionEnabled() )
 		return 0;
 	
 	// some magic code to determine how badly do we need to garbage collect...
@@ -372,7 +388,7 @@ int MemoryManager::Mark(int steps)
 			break;
 
 		case Value::VT_Function:
-			for( Box* box : ((Function*)currentObject)->boxes )
+			for( Box* box : ((Function*)currentObject)->freeVariables )
 			{
 				if( box && box->state == mCurrentWhite )
 				{

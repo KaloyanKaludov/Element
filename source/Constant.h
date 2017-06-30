@@ -6,7 +6,7 @@
 namespace element
 {
 
-struct CodeSegment;
+struct CodeObject;
 
 
 struct Constant
@@ -18,7 +18,7 @@ struct Constant
 		CT_Integer,
 		CT_Float,
 		CT_String,
-		CT_CodeSegment,
+		CT_CodeObject,
 	};
 	
 	Type type;
@@ -29,7 +29,7 @@ struct Constant
 		int				integer;
 		float			floatingPoint;
 		std::string*	string;
-		CodeSegment*	codeSegment;
+		CodeObject*		codeObject;
 		unsigned		size;
 	};
 	
@@ -38,11 +38,8 @@ struct Constant
 	Constant(int integer);
 	Constant(float floatingPoint);
 	Constant(const std::string& string);
+	Constant(CodeObject* codeObject);
 	~Constant();
-	
-	void MakeFunction(	int index = 0,
-						int localVariablesCount = 0,
-						int namedParametersCount = 0 );
 	
 	bool Equals(int i) const;
 	bool Equals(float f) const;

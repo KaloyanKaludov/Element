@@ -1,9 +1,25 @@
 #include "DataTypes.h"
 
-#include <algorithm>
-
 namespace element
 {
+
+CodeObject::CodeObject()
+: localVariablesCount(0)
+, namedParametersCount(0)
+{
+}
+
+CodeObject::CodeObject(	Instruction* instructions, unsigned instructionsSize, 
+						SourceCodeLine* lines, unsigned linesSize,
+						int localVariablesCount, 
+						int namedParametersCount )
+: instructions(instructions, instructions + instructionsSize)
+, localVariablesCount(localVariablesCount)
+, namedParametersCount(namedParametersCount)
+, instructionLines(lines, lines + linesSize)
+{
+}
+
 
 GarbageCollected::GarbageCollected(Value::Type type)
 : next(nullptr)
@@ -61,54 +77,20 @@ Object::Object()
 {}
 
 
-CodeObject::CodeObject(	Instruction* data, unsigned size, 
-						std::pair<int, int>* lines, unsigned linesSize,
-						int localVariablesCount, 
-						int namedParametersCount )
-: instructions(data, data + size)
-, localVariablesCount(localVariablesCount)
-, namedParametersCount(namedParametersCount)
-, instructionLines(lines, lines + linesSize)
-{
-}
-
-CodeObject::CodeObject(	Instruction* instructions, unsigned instructionsSize, 
-						AskedVariable* closure, unsigned closureSize,
-						std::pair<int, int>* lines, unsigned linesSize,
-						int localVariablesCount, int namedParametersCount)
-: closureMapping(closure, closure + closureSize)
-, instructions(instructions, instructions + instructionsSize)
-, localVariablesCount(localVariablesCount)
-, namedParametersCount(namedParametersCount)
-, instructionLines(lines, lines + linesSize)
-{
-}
-
-
 Box::Box()
 : GarbageCollected(Value::VT_Box)
 {}
 
 
-Function::Function(CodeObject* codeObject)
+Function::Function(const CodeObject* codeObject)
 : GarbageCollected(Value::VT_Function)
-, instructions(codeObject->instructions.data())
-, instructionsEnd(codeObject->instructions.data() + codeObject->instructions.size())
-, localVariablesCount(codeObject->localVariablesCount)
-, namedParametersCount(codeObject->namedParametersCount)
-, instructionLines(&codeObject->instructionLines)
-, closureMapping(&codeObject->closureMapping)
+, codeObject(codeObject)
 {
 }
 
 Function::Function(const Function* o)
 : GarbageCollected(Value::VT_Function)
-, instructions(o->instructions)
-, instructionsEnd(o->instructionsEnd)
-, localVariablesCount(o->localVariablesCount)
-, namedParametersCount(o->namedParametersCount)
-, instructionLines(o->instructionLines)
-, closureMapping(o->closureMapping)
+, codeObject(o->codeObject)
 {
 }
 

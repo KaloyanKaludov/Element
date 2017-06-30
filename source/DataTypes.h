@@ -11,6 +11,30 @@
 namespace element
 {
 
+struct SourceCodeLine
+{
+	int line;
+	int instructionIndex;
+};
+
+
+struct CodeObject
+{
+	std::vector<Instruction> instructions;
+	int localVariablesCount;
+	int namedParametersCount;
+	
+	std::vector<int>			closureMapping;
+	std::vector<SourceCodeLine>	instructionLines;
+	
+	CodeObject();
+	
+	CodeObject(	Instruction* instructions, unsigned instructionsSize,
+				SourceCodeLine* lines, unsigned linesSize,
+				int localVariablesCount, int namedParametersCount);
+};
+
+
 struct GarbageCollected
 {
 	enum State : char // Tri-color marking (incremental garbage collection)
@@ -69,26 +93,6 @@ struct Object : public GarbageCollected
 };
 
 
-struct CodeObject
-{
-	std::vector<AskedVariable> closureMapping;
-	std::vector<Instruction> instructions;
-	int localVariablesCount;
-	int namedParametersCount;
-	
-	std::vector< std::pair<int, int> > instructionLines;
-	
-	CodeObject(	Instruction* data, unsigned size,
-				std::pair<int, int>* lines, unsigned linesSize,
-				int localVariablesCount, int namedParametersCount);
-	
-	CodeObject(	Instruction* instructions, unsigned instructionsSize, 
-				AskedVariable* closure, unsigned closureSize,
-				std::pair<int, int>* lines, unsigned linesSize,
-				int localVariablesCount, int namedParametersCount);
-};
-
-
 struct Box : public GarbageCollected
 {
 	Value value;
@@ -99,18 +103,10 @@ struct Box : public GarbageCollected
 
 struct Function : public GarbageCollected
 {
-	const Instruction* instructions;
-	const Instruction* instructionsEnd;
+	const CodeObject*	codeObject;
+	std::vector<Box*>	freeVariables;
 	
-	int localVariablesCount;
-	int namedParametersCount;
-	
-	std::vector< std::pair<int, int> >* instructionLines;
-	
-	std::vector<AskedVariable>*	closureMapping;
-	std::vector<Box*>			boxes;
-	
-	Function(CodeObject* codeObject);
+	Function(const CodeObject* codeObject);
 	Function(const Function* o);
 };
 

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<CodeLite_Project Name="Element" InternalType="Console">
+<CodeLite_Project Name="Element" InternalType="Console" Version="10.0.0">
   <Plugins>
     <Plugin Name="qmake">
       <![CDATA[00020001N0005Debug0000000000000001N0007Release000000000000]]>
@@ -72,6 +72,7 @@
     <File Name="../../examples/misc.element"/>
     <File Name="../../examples/objects.element"/>
     <File Name="../../examples/gc-tests.element"/>
+    <File Name="../../examples/test.element"/>
   </VirtualDirectory>
   <Settings Type="Executable">
     <GlobalSettings>
@@ -83,13 +84,14 @@
       </Linker>
       <ResourceCompiler Options=""/>
     </GlobalSettings>
-    <Configuration Name="Debug" CompilerType="clang( based on LLVM 3.5.0 )" DebuggerType="GNU gdb debugger" Type="Executable" BuildCmpWithGlobalSettings="append" BuildLnkWithGlobalSettings="append" BuildResWithGlobalSettings="append">
-      <Compiler Options="-m32;-g;-std=c++14;-std=c++11;-Wall" C_Options="-m32;-g;-std=c++14;-std=c++11;-Wall" Assembler="" Required="yes" PreCompiledHeader="" PCHInCommandLine="no" PCHFlags="" PCHFlagsPolicy="0">
+    <Configuration Name="Debug" CompilerType="clang++-3.8" DebuggerType="GNU gdb debugger" Type="Executable" BuildCmpWithGlobalSettings="append" BuildLnkWithGlobalSettings="append" BuildResWithGlobalSettings="append">
+      <Compiler Options="-g;-std=c++14;-Wall;" C_Options="-g;-std=c++14;-Wall;" Assembler="" Required="yes" PreCompiledHeader="" PCHInCommandLine="no" PCHFlags="" PCHFlagsPolicy="0">
         <IncludePath Value="../../source"/>
       </Compiler>
-      <Linker Options="-m32" Required="yes"/>
+      <Linker Options="" Required="yes"/>
       <ResourceCompiler Options="" Required="no"/>
-      <General OutputFile="../../bin/element_d" IntermediateDirectory="./Debug" Command="element_d" CommandArguments="-dc ../examples/gc-tests.element" UseSeparateDebugArgs="no" DebugArguments="" WorkingDirectory="../../bin" PauseExecWhenProcTerminates="yes" IsGUIProgram="no" IsEnabled="yes"/>
+      <General OutputFile="../../bin/element_d" IntermediateDirectory="./Debug" Command="element_d" CommandArguments="" UseSeparateDebugArgs="no" DebugArguments="" WorkingDirectory="../../bin" PauseExecWhenProcTerminates="yes" IsGUIProgram="no" IsEnabled="yes"/>
+      <BuildSystem Name="Default"/>
       <Environment EnvVarSetName="&lt;Use Defaults&gt;" DbgSetName="&lt;Use Defaults&gt;">
         <![CDATA[]]>
       </Environment>
@@ -121,14 +123,15 @@
         <SearchPaths/>
       </Completion>
     </Configuration>
-    <Configuration Name="Release" CompilerType="clang( based on LLVM 3.5.0 )" DebuggerType="GNU gdb debugger" Type="Executable" BuildCmpWithGlobalSettings="append" BuildLnkWithGlobalSettings="append" BuildResWithGlobalSettings="append">
-      <Compiler Options="-m32;-O2;-std=c++14;-std=c++11;-Wall" C_Options="-m32;-O2;-std=c++14;-std=c++11;-Wall" Assembler="" Required="yes" PreCompiledHeader="" PCHInCommandLine="no" PCHFlags="" PCHFlagsPolicy="0">
+    <Configuration Name="Release" CompilerType="clang++-3.8" DebuggerType="GNU gdb debugger" Type="Executable" BuildCmpWithGlobalSettings="append" BuildLnkWithGlobalSettings="append" BuildResWithGlobalSettings="append">
+      <Compiler Options="-O3;-std=c++14;-Wall" C_Options="-O3;-std=c++14;-Wall" Assembler="" Required="yes" PreCompiledHeader="" PCHInCommandLine="no" PCHFlags="" PCHFlagsPolicy="0">
         <IncludePath Value="../../source"/>
         <Preprocessor Value="NDEBUG"/>
       </Compiler>
-      <Linker Options="-m32" Required="yes"/>
+      <Linker Options="" Required="yes"/>
       <ResourceCompiler Options="" Required="no"/>
       <General OutputFile="../../bin/element" IntermediateDirectory="./Release" Command="element" CommandArguments="" UseSeparateDebugArgs="no" DebugArguments="" WorkingDirectory="../../bin" PauseExecWhenProcTerminates="yes" IsGUIProgram="no" IsEnabled="yes"/>
+      <BuildSystem Name="Default"/>
       <Environment EnvVarSetName="&lt;Use Defaults&gt;" DbgSetName="&lt;Use Defaults&gt;">
         <![CDATA[]]>
       </Environment>

@@ -31,23 +31,18 @@ Constant::Constant(const std::string& string)
 , string(new std::string(string))
 {}
 
+Constant::Constant(CodeObject* codeObject)
+: type(CT_CodeObject)
+, codeObject(codeObject)
+{
+}
+
 Constant::~Constant()
 {
 	if( type == CT_String && string )
 		delete string;
-	else if( type == CT_CodeSegment && codeSegment )
-		delete codeSegment;
-}
-
-void Constant::MakeFunction(int index,
-							int localVariablesCount,
-							int namedParametersCount)
-{
-	type = CT_CodeSegment;
-	CodeSegment* cs = new CodeSegment(index);
-	codeSegment = cs;
-	codeSegment->localVariablesCount = localVariablesCount;
-	codeSegment->namedParametersCount = namedParametersCount;
+	else if( type == CT_CodeObject && codeObject )
+		delete codeObject;
 }
 
 bool Constant::Equals(int i) const
@@ -87,18 +82,18 @@ unsigned Constant::CalculateSize() const
 	case CT_String:
 		return sizeof(Constant::Type) + sizeof(unsigned) + (string ? string->size() : 0) * sizeof(char);
 		
-	case CT_CodeSegment:
+	case CT_CodeObject:
 	{
-		unsigned closureSize		= codeSegment ? codeSegment->closureMapping.size() : 0;
-		unsigned instructionsCount	= codeSegment ? codeSegment->instructions.size() : 0;
-		unsigned linesCount			= codeSegment ? codeSegment->instructionLines.size() : 0;
+		unsigned closureSize		= codeObject ? codeObject->closureMapping.size() : 0;
+		unsigned instructionsCount	= codeObject ? codeObject->instructions.size() : 0;
+		unsigned linesCount			= codeObject ? codeObject->instructionLines.size() : 0;
 		
 		return	sizeof(Constant::Type) + 
 				3 * sizeof(unsigned) +
 				2 * sizeof(int) +
-				closureSize * sizeof(AskedVariable) +
+				closureSize * sizeof(int) +
 				instructionsCount * sizeof(Instruction) +
-				linesCount * sizeof(std::pair<int, int>);
+				linesCount * sizeof(SourceCodeLine);
 	}
 	}
 	
@@ -138,56 +133,56 @@ char* Constant::WriteConstant(char* memoryDestination) const
 		return memoryDestination;
 	}
 		
-	case CT_CodeSegment:
+	case CT_CodeObject:
 	{
-		Constant::Type type = Constant::CT_CodeSegment;
+		Constant::Type type = Constant::CT_CodeObject;
 		
 		memcpy(memoryDestination, &type, sizeof(Constant::Type));
 		memoryDestination += sizeof(Constant::Type);
 		
-		unsigned closureSize = codeSegment ? codeSegment->closureMapping.size() : 0;
+		unsigned closureSize = codeObject ? codeObject->closureMapping.size() : 0;
 		
 		memcpy(memoryDestination, &closureSize, sizeof(unsigned));
 		memoryDestination += sizeof(unsigned);
 		
-		unsigned instructionsCount = codeSegment ? codeSegment->instructions.size() : 0;
+		unsigned instructionsCount = codeObject ? codeObject->instructions.size() : 0;
 		
 		memcpy(memoryDestination, &instructionsCount, sizeof(unsigned));
 		memoryDestination += sizeof(unsigned);
 		
-		unsigned linesCount = codeSegment ? codeSegment->instructionLines.size() : 0;
+		unsigned linesCount = codeObject ? codeObject->instructionLines.size() : 0;
 		
 		memcpy(memoryDestination, &linesCount, sizeof(unsigned));
 		memoryDestination += sizeof(unsigned);
 		
-		int localsCount = codeSegment ? codeSegment->localVariablesCount : 0;
+		int localsCount = codeObject ? codeObject->localVariablesCount : 0;
 				
 		memcpy(memoryDestination, &localsCount, sizeof(int));
 		memoryDestination += sizeof(int);
 		
-		int paramsCount = codeSegment ? codeSegment->namedParametersCount : 0;
+		int paramsCount = codeObject ? codeObject->namedParametersCount : 0;
 		
 		memcpy(memoryDestination, &paramsCount, sizeof(int));
 		memoryDestination += sizeof(int);
 		
-		if( codeSegment && closureSize > 0 )
+		if( codeObject && closureSize > 0 )
 		{
-			unsigned size = closureSize * sizeof(AskedVariable);
-			memcpy(memoryDestination, codeSegment->closureMapping.data(), size);
+			unsigned size = closureSize * sizeof(int);
+			memcpy(memoryDestination, codeObject->closureMapping.data(), size);
 			memoryDestination += size;
 		}
 		
-		if( codeSegment && instructionsCount > 0 )
+		if( codeObject && instructionsCount > 0 )
 		{
 			unsigned size = instructionsCount * sizeof(Instruction);
-			memcpy(memoryDestination, codeSegment->instructions.data(), size);
+			memcpy(memoryDestination, codeObject->instructions.data(), size);
 			memoryDestination += size;
 		}
 		
-		if( codeSegment && linesCount > 0 )
+		if( codeObject && linesCount > 0 )
 		{
-			unsigned size = linesCount * sizeof(std::pair<int, int>);
-			memcpy(memoryDestination, codeSegment->instructionLines.data(), size);
+			unsigned size = linesCount * sizeof(SourceCodeLine);
+			memcpy(memoryDestination, codeObject->instructionLines.data(), size);
 			memoryDestination += size;
 		}
 		

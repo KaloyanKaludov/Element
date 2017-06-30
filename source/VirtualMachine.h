@@ -22,7 +22,6 @@ public:				VirtualMachine(Logger& logger);
 	void			GarbageCollect(int steps = std::numeric_limits<int>::max());
 
 	void			SetError(const char* format, ...);
-	void			PropagateError();
 	bool			HasError() const;
 	void			ClearError();
 	
@@ -55,7 +54,6 @@ protected:
 		Function*			function		= nullptr;
 		const Instruction*	ip				= nullptr;
 		const Instruction*	instructions	= nullptr;
-		const Instruction*	instructionsEnd	= nullptr;
 		Object*				thisObject		= nullptr;
 		std::vector<Value>	variables;
 		Array				anonymousParameters;
@@ -70,15 +68,17 @@ protected:
 
 protected:
 	int		ParseBytecode(const char* bytecode);
-	void	RunCode();
+	void	RunCodeForFrame(Frame* frame);
+	
+	void	Call(int argumentsCount);
+	void	CallNative(int argumentsCount);
 	
 	void	LoadElementFromArray(const Array* array, int index, Value* outValue) const;
 	void	StoreElementInArray(Array* array, int index, const Value* newValue);
 	void	LoadMemberFromObject(Object* object, unsigned hash, Value* outValue) const;
 	void	StoreMemberInObject(Object* object, unsigned hash, const Value* newValue);
-	void	Call(int argumentsCount);
-	void	CallNative(int argumentsCount);
-	void	DoBinaryOperation(int opCode);
+	
+	bool	DoBinaryOperation(int opCode);
 
 	int		CurrentLineFromFrame(const Frame* frame) const;
 	
@@ -90,20 +90,19 @@ private:
 
 	MemoryManager						mMemoryManager;
 	
-	std::deque<CodeObject>				mCodeObjects;
-	std::vector<Value>					mConstants;
-	std::deque<Function>				mConstantFunctions;
+	std::vector<Value>					mConstants; // this is the common access point for the 3 deques below
 	std::deque<String>					mConstantStrings;
+	std::deque<Function>				mConstantFunctions;
+	std::deque<CodeObject>				mConstantCodeObjects;
+	
 	std::vector<Value::NativeFunction>	mNativeFunctions;
 	std::map<unsigned, SymbolInfo>		mSymbolInfos;
 	
-	std::map<int, Value>				mGlobalVariables;
-	std::deque<Frame>					mStackFrames;
-	Frame*								mCurrentFrame;
+	std::vector<Value>					mGlobals;
+	
+	std::deque<Frame>					mStackFrames; // this needs to be a deque, because things keep references to it
 	Object*								mLastObject;
 	std::vector<Value>					mStack;
-	
-	unsigned							mInstructionsProcessed;
 };
 
 }

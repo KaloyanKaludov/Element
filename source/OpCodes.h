@@ -1,12 +1,10 @@
 #ifndef _OP_CODES_INCLUDED_
 #define _OP_CODES_INCLUDED_
 
-#include <vector>
-
 namespace element
 {
 
-// TOS == Top Of Stack
+// TOS  == Top Of Stack
 // TOS1 == The value beneath TOS
 // TOS2 == The value beneath TOS1
 
@@ -56,10 +54,15 @@ enum OpCode : char
 	OC_GeneratorNextValue,	// call 'next_value' from the TOS object
 	
 	// closures
+	OC_MakeBox,				// A is the index of the box that needs to be created
 	OC_LoadFromBox,			// load the value stored in the box at index A
 	OC_StoreToBox,			// A is the index of the box that holds the value
 	OC_PopStoreToBox,		// A is the index of the box that holds the value
-	OC_MakeClosure,			// A is the number of boxed locals, TOS is the function object
+	
+	OC_MakeClosure,			// Create a closure from the function object at TOS and replace it
+	OC_LoadFromClosure,		// load the value of the free variable inside the closure at index A
+	OC_StoreToClosure,		// A is the index of the free variable inside the closure
+	OC_PopStoreToClosure,	// A is the index of the free variable inside the closure
 
 	// move the instruction pointer
 	OC_Jump,				// jump to A
@@ -69,7 +72,7 @@ enum OpCode : char
 	OC_JumpIfTrueOrPop,		// jump to A, if TOS is true, otherwise pop TOS (or-op)
 	
 	OC_FunctionCall,		// function to call and arguments are on stack, A is arguments count
-	OC_EndFunction,			// pop function scope, restore previous frame
+	OC_EndFunction,			// end function sentinel
 	
 	// binary operations take two arguments from the stack, result in TOS
 	OC_Add,
@@ -110,31 +113,6 @@ struct Instruction
 	Instruction(OpCode opCode, int A = 0)
 	: opCode(opCode)
 	, A(A)
-	{}
-};
-
-
-struct AskedVariable
-{
-	int fromIndex;
-	int toIndex;
-};
-
-
-struct CodeSegment
-{
-	std::vector<AskedVariable> closureMapping;
-	std::vector<Instruction> instructions;
-	int index;
-	int localVariablesCount;
-	int namedParametersCount;
-	
-	std::vector< std::pair<int,int> > instructionLines;
-	
-	CodeSegment(int index = 0)
-	: index(index)
-	, localVariablesCount(0)
-	, namedParametersCount(0)
 	{}
 };
 

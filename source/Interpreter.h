@@ -2,7 +2,6 @@
 #define _INTERPRETER_H_INCLUDED_
 
 #include "Logger.h"
-#include "Lexer.h"
 #include "Parser.h"
 #include "SemanticAnalyzer.h"
 #include "Compiler.h"
@@ -26,9 +25,8 @@ public:			Interpreter();
 
 private:
 	Logger				mLogger;
-	Lexer				mLexer;
 	Parser				mParser;
-	SemanticAnalyzer 	mSemanticAnalyzer;
+	SemanticAnalyzer	mSemanticAnalyzer;
 	Compiler			mCompiler;
 	VirtualMachine		mVirtualMachine;
 

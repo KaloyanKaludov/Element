@@ -23,12 +23,20 @@ Node::~Node()
 VariableNode::VariableNode(int variableType, const SourceCoords& coords)
 : Node(N_Variable, coords)
 , variableType(variableType)
+
+, semanticType(SMT_Global)
+, firstOccurrence(false)
+, index(-1)
 {}
 
 VariableNode::VariableNode(const std::string& name, const SourceCoords& coords)
 : Node(N_Variable, coords)
 , variableType(V_Named)
 , name(name)
+
+, semanticType(SMT_Global)
+, firstOccurrence(false)
+, index(-1)
 {}
 
 
@@ -94,6 +102,8 @@ FunctionNode::FunctionNode(const NamedParameters& namedParameters,
 : Node(N_Function, coords)
 , namedParameters(namedParameters)
 , body(body)
+
+, localVariablesCount(0)
 {}
 
 FunctionNode::~FunctionNode()
@@ -165,6 +175,8 @@ BlockNode::BlockNode(std::vector<Node*>& nodes,
 					 const SourceCoords& coords)
 : Node(N_Block, coords)
 , nodes(nodes)
+
+, explicitFunctionBlock(false)
 {}
 
 BlockNode::~BlockNode()

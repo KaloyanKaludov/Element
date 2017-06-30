@@ -1,9 +1,11 @@
 #ifndef _PARSER_H_INCLUDED_
 #define _PARSER_H_INCLUDED_
 
+#include <memory>
 #include <vector>
 #include <string>
 #include "Tokens.h"
+#include "Lexer.h"
 #include "Logger.h"
 
 namespace element
@@ -12,17 +14,17 @@ namespace element
 namespace ast
 {
 	struct Node;
+	struct FunctionNode;
 }
-class Lexer;
 
 
 class Parser
 {
-public:			Parser(Lexer& lexer, Logger& logger);
+public:									Parser(Logger& logger);
 	
-	ast::Node*	ParseExpression();
+	std::unique_ptr<ast::FunctionNode>	Parse(std::istream& input);
 	
-	void		DebugPrintAST(const ast::Node* root, int indent = 0) const;
+	void								DebugPrintAST(const ast::Node* root, int indent = 0) const;
 
 protected:
 	enum ExpressionType
@@ -47,6 +49,8 @@ protected:
 	};
 
 protected:
+	ast::Node* ParseExpression();
+	
 	ast::Node* ParsePrimary();
 	ast::Node* ParsePrimitive();
 	ast::Node* ParseVarialbe();
@@ -69,8 +73,8 @@ protected:
 	bool IsExpressionTerminator(Token token) const;
 	
 private:
-	Lexer&	mLexer;
-	Logger& mLogger;
+	Logger&	mLogger;
+	Lexer	mLexer;
 };
 
 }

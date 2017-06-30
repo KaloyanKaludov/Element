@@ -1,10 +1,21 @@
 #ifndef _SEMANTIC_ANALYZER_H_INCLUDED_
 #define _SEMANTIC_ANALYZER_H_INCLUDED_
 
-#include "AST.h"
+#include <string>
+#include <deque>
+#include <map>
+#include "Logger.h"
 
 namespace element
 {
+
+namespace ast
+{
+	struct Node;
+	struct VariableNode;
+	struct FunctionNode;
+	struct BinaryOperatorNode;
+}
 
 class Logger;
 
@@ -12,7 +23,14 @@ class Logger;
 class SemanticAnalyzer
 {
 public:		SemanticAnalyzer(Logger& logger);
-	void	Analyze(std::vector<ast::Node*>& astNodes);
+
+	void	Analyze(ast::FunctionNode* node);
+	
+	void	AddNativeFunction(const std::string& name, int index);
+	
+	void	ResetState();
+	
+	void	DebugPrintSemantics(const ast::Node* root, int indent = 0) const;
 
 protected:
 	enum ContextType
@@ -25,8 +43,25 @@ protected:
 		CXT_InArguments
 	};
 	
+	struct BlockScope
+	{
+		std::map<std::string, ast::VariableNode*> variables;
+	};
+	
+	struct FunctionScope
+	{
+		ast::FunctionNode* node;
+		
+		std::vector<BlockScope>		blocks;
+		std::vector<std::string>	parameters;
+		std::vector<std::string>	freeVariables;
+		
+		FunctionScope(ast::FunctionNode* n);
+	};
+	
 protected:
 	bool	AnalyzeNode(ast::Node* node);
+	bool	AnalyzeBinaryOperator(const ast::BinaryOperatorNode* n);
 	
 	bool	IsBreakContinueReturn(const ast::Node* node) const;
 	bool	IsBreakContinue(const ast::Node* node) const;
@@ -35,10 +70,22 @@ protected:
 	bool	IsInFunction() const;
 	bool	IsInConstruction() const;
 	
-private:
-	Logger&	mLogger;
+	void	ResolveNamesInNodes(std::vector<ast::Node*> nodesToProcess);
+	void	ResolveName(ast::VariableNode* vn);
+	bool	TryToFindNameInTheEnclosingFunctions(ast::VariableNode* vn);
 	
-	std::vector<ContextType> mContext;
+private:
+	Logger&						mLogger;
+	
+	std::vector<ContextType>	mContext;
+	
+	ast::FunctionNode*			mCurrentFunctionNode;
+	
+	std::vector<FunctionScope>	mFunctionScopes;
+	
+	std::vector<std::string>	mGlobalVariables;
+
+	std::map<std::string, int>	mNativeFunctions;
 };
 
 }

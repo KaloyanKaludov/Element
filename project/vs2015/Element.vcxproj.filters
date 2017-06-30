@@ -6,7 +6,7 @@
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
     <Filter Include="examples">
-      <UniqueIdentifier>{84f6f5c0-a191-4487-a85b-98fefe632d09}</UniqueIdentifier>
+      <UniqueIdentifier>{b152cb16-8bfa-45eb-bb3c-99e2b6df886f}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -34,9 +34,6 @@
     <ClCompile Include="..\..\source\main.cpp">
       <Filter>source</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\MemoryManager.cpp">
-      <Filter>source</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\source\Native.cpp">
       <Filter>source</Filter>
     </ClCompile>
@@ -46,9 +43,6 @@
     <ClCompile Include="..\..\source\Parser.cpp">
       <Filter>source</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\SemanticAnalyzer.cpp">
-      <Filter>source</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\source\Symbol.cpp">
       <Filter>source</Filter>
     </ClCompile>
@@ -56,6 +50,12 @@
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\VirtualMachine.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\SemanticAnalyzer.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\MemoryManager.cpp">
       <Filter>source</Filter>
     </ClCompile>
   </ItemGroup>
@@ -81,9 +81,6 @@
     <ClInclude Include="..\..\source\Logger.h">
       <Filter>source</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\MemoryManager.h">
-      <Filter>source</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\source\Native.h">
       <Filter>source</Filter>
     </ClInclude>
@@ -96,9 +93,6 @@
     <ClInclude Include="..\..\source\Parser.h">
       <Filter>source</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\source\SemanticAnalyzer.h">
-      <Filter>source</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\source\Symbol.h">
       <Filter>source</Filter>
     </ClInclude>
@@ -109,6 +103,12 @@
       <Filter>source</Filter>
     </ClInclude>
     <ClInclude Include="..\..\source\VirtualMachine.h">
+      <Filter>source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\SemanticAnalyzer.h">
+      <Filter>source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\MemoryManager.h">
       <Filter>source</Filter>
     </ClInclude>
   </ItemGroup>
@@ -125,9 +125,6 @@
     <None Include="..\..\examples\functions.element">
       <Filter>examples</Filter>
     </None>
-    <None Include="..\..\examples\gc-tests.element">
-      <Filter>examples</Filter>
-    </None>
     <None Include="..\..\examples\generators.element">
       <Filter>examples</Filter>
     </None>
@@ -135,6 +132,9 @@
       <Filter>examples</Filter>
     </None>
     <None Include="..\..\examples\objects.element">
+      <Filter>examples</Filter>
+    </None>
+    <None Include="..\..\examples\test.element">
       <Filter>examples</Filter>
     </None>
   </ItemGroup>

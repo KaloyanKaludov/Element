@@ -16,51 +16,20 @@ Compiler::Compiler(Logger& logger)
 	ResetState();
 }
 
-char* Compiler::Compile(const std::vector<ast::Node*>& astNodes)
+std::unique_ptr<char[]> Compiler::Compile(const ast::FunctionNode* node)
 {
-	// create a "main" function to store top level code
-	mConstants.emplace_back();
-	mConstants.back().MakeFunction( int(mConstants.size()) - 1 );
-	mCurrentFunction = mConstants.back().codeSegment;
-
-	// add a context for the "main" function
-	mFunctionContexts.emplace_back();
-
-	// do the actual compilation
-	int lastNodeIndex = int(astNodes.size()) - 1;
-	
-	if( lastNodeIndex >= 0 )
-	{
-		for( int i = 0; i < lastNodeIndex; ++i )
-			EmitInstructions(astNodes[i], false);
-
-		EmitInstructions(astNodes[lastNodeIndex], true);
-	}
-	else // empty block, but we expect a value, so we push a nil
-	{
-		mCurrentFunction->instructions.emplace_back(OpCode::OC_LoadConstant, 0);
-	}
-	
-	// handle local variables from the the "main" function (from global blocks)
-	PopFunctionContext( mCurrentFunction->instructions.size() );
+	BuildFunction(node, true);
 	
 	return BuildBinaryData();
 }
 
 void Compiler::ResetState()
 {
-	mLogger.ClearErrorMessages();
-	
-	mNativeFunctions.clear();
-	
 	mConstantsTotalOffset = 0;
 
 	mLoopContexts.clear();
 	mFunctionContexts.clear();
 
-	mGlobalScope.clear();
-	mTotalGlobalIndices = 0;
-	
 	mConstants.emplace_back();		// nil
 	mConstants.emplace_back(true);	// true
 	mConstants.emplace_back(false);	// false
@@ -160,7 +129,7 @@ void Compiler::DebugPrintBytecode(const char* bytecode, bool printSymbols, bool 
 			break;
 		}
 		
-		case Constant::CT_CodeSegment:
+		case Constant::CT_CodeObject:
 		{
 			unsigned* uintp = (unsigned*)((Constant::Type*)constant + 1);
 			unsigned closureSize = *uintp;
@@ -177,29 +146,32 @@ void Compiler::DebugPrintBytecode(const char* bytecode, bool printSymbols, bool 
 			
 			printf("function - %d locals (%d parameters)\n", localVariablesCount, namedParametersCount);
 			
-			AskedVariable* mapping = nullptr;
-			Instruction* instructions = nullptr;
-			std::pair<int,int>* lines = nullptr;
+			int*			closureMapping	= nullptr;
+			Instruction*	instructions	= nullptr;
+			SourceCodeLine*	lines			= nullptr;
 			
 			if( closureSize > 0 )
 			{
-				mapping = (AskedVariable*)intp;
-				instructions = (Instruction*)(mapping + closureSize);
+				printf("           closure created from:\n");
+				closureMapping = intp;
+				instructions = (Instruction*)(closureMapping + closureSize);
 			}
 			else // no closure, just instructions
 			{
 				instructions = (Instruction*)intp;
 			}
 			
-			lines = (std::pair<int,int>*)(instructions + instructionsSize);
+			lines = (SourceCodeLine*)(instructions + instructionsSize);
 			
 			for( unsigned i = 0; i < closureSize; ++i )
 			{
-				AskedVariable* asked = &mapping[i];
-				if( asked->fromIndex == -1 )
-					printf("\t\tnew -> %d\n", asked->toIndex);
+				printf("           [%d] ", i);
+				
+				int variableIndex = closureMapping[i];
+				if( variableIndex >= 0 )
+					printf("local boxed %d\n", variableIndex);
 				else
-					printf("\t\t%3d -> %d\n", asked->fromIndex, asked->toIndex);
+					printf("free variable %d\n", -variableIndex - 1);
 			}
 			
 			unsigned linesIndex = 0;
@@ -208,9 +180,9 @@ void Compiler::DebugPrintBytecode(const char* bytecode, bool printSymbols, bool 
 			{
 				Instruction* instruction = &instructions[i];
 				
-				if( linesIndex < linesSize && i == lines[linesIndex].second )
+				if( linesIndex < linesSize && int(i) >= lines[linesIndex].instructionIndex )
 				{
-					printf("       %3u %5u ", lines[linesIndex].first, i);
+					printf("       %3u %5u ", lines[linesIndex].line, i);
 					++linesIndex;
 				}
 				else
@@ -223,38 +195,38 @@ void Compiler::DebugPrintBytecode(const char* bytecode, bool printSymbols, bool 
 				case OpCode::OC_Pop:
 					printf("Pop\n"); break;
 				case OpCode::OC_PopN:
-					printf("PopN             %d\n", instruction->A); break;
+					printf("PopN              %d\n", instruction->A); break;
 				case OpCode::OC_Rotate2:
 					printf("Rotate2\n"); break;
 				case OpCode::OC_MoveToTOS2:
 					printf("MoveToTOS2\n"); break;
 
 				case OpCode::OC_LoadConstant:
-					printf("LoadConstant     %d\n", instruction->A); break;
+					printf("LoadConstant      %d\n", instruction->A); break;
 				case OpCode::OC_LoadGlobal:
-					printf("LoadGlobal       %d\n", instruction->A); break;
+					printf("LoadGlobal        %d\n", instruction->A); break;
 				case OpCode::OC_LoadLocal:
-					printf("LoadLocal        %d\n", instruction->A); break;
+					printf("LoadLocal         %d\n", instruction->A); break;
 				case OpCode::OC_LoadNative:
-					printf("LoadNative       %d\n", instruction->A); break;
+					printf("LoadNative        %d\n", instruction->A); break;
 				case OpCode::OC_LoadArgument:
-					printf("LoadArgument     %d\n", instruction->A); break;
+					printf("LoadArgument      %d\n", instruction->A); break;
 				case OpCode::OC_LoadArgsArray:
 					printf("LoadArgsArray\n"); break;
 				case OpCode::OC_LoadThis:
 					printf("LoadThis\n"); break;
 				
 				case OpCode::OC_StoreGlobal:
-					printf("StoreGlobal      %d\n", instruction->A); break;
+					printf("StoreGlobal       %d\n", instruction->A); break;
 				case OpCode::OC_StoreLocal:
-					printf("StoreLocal       %d\n", instruction->A); break;
+					printf("StoreLocal        %d\n", instruction->A); break;
 				case OpCode::OC_PopStoreGlobal:
-					printf("PopStoreGlobal   %d\n", instruction->A); break;
+					printf("PopStoreGlobal    %d\n", instruction->A); break;
 				case OpCode::OC_PopStoreLocal:
-					printf("PopStoreLocal    %d\n", instruction->A); break;
+					printf("PopStoreLocal     %d\n", instruction->A); break;
 				
 				case OpCode::OC_MakeArray:
-					printf("MakeArray        %d\n", instruction->A); break;
+					printf("MakeArray         %d\n", instruction->A); break;
 				case OpCode::OC_LoadElement:
 					printf("LoadElement\n"); break;
 				case OpCode::OC_StoreElement:
@@ -263,11 +235,11 @@ void Compiler::DebugPrintBytecode(const char* bytecode, bool printSymbols, bool 
 					printf("PopStoreElement\n"); break;
 
 				case OpCode::OC_MakeObject:
-					printf("MakeObject       %d\n", instruction->A); break;
+					printf("MakeObject        %d\n", instruction->A); break;
 				case OpCode::OC_MakeEmptyObject:
 					printf("MakeEmptyObject\n"); break;
 				case OpCode::OC_LoadHash:
-					printf("LoadHash         %X\n", instruction->H); break;
+					printf("LoadHash          %X\n", instruction->H); break;
 				case OpCode::OC_LoadMember:
 					printf("LoadMember\n"); break;
 				case OpCode::OC_StoreMember:
@@ -282,28 +254,36 @@ void Compiler::DebugPrintBytecode(const char* bytecode, bool printSymbols, bool 
 				case OpCode::OC_GeneratorNextValue:
 					printf("GeneratorNextValue\n"); break;
 					
+				case OpCode::OC_MakeBox:
+					printf("MakeBox           %d\n", instruction->A); break;
 				case OpCode::OC_LoadFromBox:
-					printf("LoadFromBox      %d\n", instruction->A); break;
+					printf("LoadFromBox       %d\n", instruction->A); break;
 				case OpCode::OC_StoreToBox:
-					printf("StoreToBox       %d\n", instruction->A); break;
+					printf("StoreToBox        %d\n", instruction->A); break;
 				case OpCode::OC_PopStoreToBox:
-					printf("PopStoreToBox    %d\n", instruction->A); break;
+					printf("PopStoreToBox     %d\n", instruction->A); break;
 				case OpCode::OC_MakeClosure:
-					printf("MakeClosure      %d\n", instruction->A); break;
+					printf("MakeClosure\n"); break;
+				case OpCode::OC_LoadFromClosure:
+					printf("LoadFromClosure   %d\n", instruction->A); break;
+				case OpCode::OC_StoreToClosure:
+					printf("StoreToClosure    %d\n", instruction->A); break;
+				case OpCode::OC_PopStoreToClosure:
+					printf("PopStoreToClosure %d\n", instruction->A); break;
 				
 				case OpCode::OC_Jump:
-					printf("Jump             %d\n", instruction->A); break;
+					printf("Jump              %d\n", instruction->A); break;
 				case OpCode::OC_JumpIfFalse:
-					printf("JumpIfFalse      %d\n", instruction->A); break;
+					printf("JumpIfFalse       %d\n", instruction->A); break;
 				case OpCode::OC_PopJumpIfFalse:
-					printf("PopJumpIfFalse   %d\n", instruction->A); break;
+					printf("PopJumpIfFalse    %d\n", instruction->A); break;
 				case OpCode::OC_JumpIfFalseOrPop:
-					printf("JumpIfFalseOrPop %d\n", instruction->A); break;
+					printf("JumpIfFalseOrPop  %d\n", instruction->A); break;
 				case OpCode::OC_JumpIfTrueOrPop:
-					printf("JumpIfTrueOrPop  %d\n", instruction->A); break;
+					printf("JumpIfTrueOrPop   %d\n", instruction->A); break;
 				
 				case OpCode::OC_FunctionCall:
-					printf("FunctionCall     %d\n", instruction->A); break;
+					printf("FunctionCall      %d\n", instruction->A); break;
 				case OpCode::OC_EndFunction:
 					printf("EndFunction\n"); break;
 				
@@ -353,7 +333,8 @@ void Compiler::DebugPrintBytecode(const char* bytecode, bool printSymbols, bool 
 					printf("UnarySizeOf\n"); break;
 				
 				default:
-					printf("unknown instruction\n"); break;
+					mLogger.PushError(0, "Unknown op code %d\n", int(instruction->opCode));
+					break;
 				}
 			}
 			
@@ -362,16 +343,11 @@ void Compiler::DebugPrintBytecode(const char* bytecode, bool printSymbols, bool 
 		}
 		
 		default:
-			printf("unknown constant type\n");
+			mLogger.PushError(0, "Unknown constant type %d\n", int(constant->type));
 			++constant;
 			break;
 		}
 	}
-}
-
-void Compiler::AddNativeFunction(const std::string& name, int index)
-{
-	mNativeFunctions[name] = index;
 }
 
 void Compiler::EmitInstructions(const ast::Node* node, bool keepValue)
@@ -382,10 +358,11 @@ void Compiler::EmitInstructions(const ast::Node* node, bool keepValue)
 	{
 		// record from which line did the next instruction come from
 		int line = node->coords.line;
-		std::vector< std::pair<int,int> >& lines = mCurrentFunction->instructionLines;
 		
-		if( lines.empty() || lines.back().first != line )
-			lines.emplace_back(line, int(mCurrentFunction->instructions.size()));
+		std::vector<SourceCodeLine>& lines = mCurrentFunction->instructionLines;
+		
+		if( lines.empty() || lines.back().line != line )
+			lines.push_back({line, int(mCurrentFunction->instructions.size())});
 	}
 	
 	// emit the instruction
@@ -450,6 +427,7 @@ void Compiler::EmitInstructions(const ast::Node* node, bool keepValue)
 		return;
 	
 	default:
+		mLogger.PushError(node->coords, "Unknown AST node type %d\n", int(node->type));
 		break;
 	}
 }
@@ -534,6 +512,7 @@ void Compiler::BuildConstantLoad(const ast::Node* node, bool keepValue)
 	}
 	
 	default:
+		mLogger.PushError(node->coords, "Unknown AST node type %d\n", int(node->type));
 		break;
 	}
 
@@ -549,22 +528,23 @@ void Compiler::BuildVariableLoad(const ast::Node* node, bool keepValue)
 			
 	if( n->variableType == ast::VariableNode::V_Named )
 	{
-		NameType nameType;
-		int index;
-		ResolveName(n->name, &nameType, &index);
-		UpdateSymbol(n->name, nameType == NT_Global ? index : -1);
+		UpdateSymbol(n->name, n->semanticType == ast::VariableNode::SMT_Global ? n->index : -1);
+		
+		if( n->semanticType == ast::VariableNode::SMT_LocalBoxed && n->firstOccurrence )
+			mCurrentFunction->instructions.emplace_back( OpCode::OC_MakeBox, n->index );
 		
 		OpCode opCode;
 		
-		switch(nameType)
+		switch(n->semanticType)
 		{
-		case NT_Local:	opCode = OpCode::OC_LoadLocal;	break;
-		case NT_Boxed:	opCode = OpCode::OC_LoadFromBox;break;
-		case NT_Global:	opCode = OpCode::OC_LoadGlobal;	break;
-		case NT_Native:	opCode = OpCode::OC_LoadNative;	break;
+		case ast::VariableNode::SMT_Local:			opCode = OpCode::OC_LoadLocal;		break;
+		case ast::VariableNode::SMT_Global:			opCode = OpCode::OC_LoadGlobal;		break;
+		case ast::VariableNode::SMT_Native:			opCode = OpCode::OC_LoadNative;		break;
+		case ast::VariableNode::SMT_LocalBoxed:		opCode = OpCode::OC_LoadFromBox;	break;
+		case ast::VariableNode::SMT_FreeVariable:	opCode = OpCode::OC_LoadFromClosure;break;
 		}
 		
-		mCurrentFunction->instructions.emplace_back( opCode, index );
+		mCurrentFunction->instructions.emplace_back( opCode, n->index );
 	}
 	else if( n->variableType == ast::VariableNode::V_This )
 	{
@@ -587,38 +567,45 @@ void Compiler::BuildVariableStore(const ast::Node* node, bool keepValue)
 			
 	if( n->variableType == ast::VariableNode::V_Named )
 	{
-		NameType nameType;
-		int index;
-		ResolveName(n->name, &nameType, &index);
-		UpdateSymbol(n->name, nameType == NT_Global ? index : -1);
+		UpdateSymbol(n->name, n->semanticType == ast::VariableNode::SMT_Global ? n->index : -1);
+		
+		if( n->semanticType == ast::VariableNode::SMT_LocalBoxed && n->firstOccurrence )
+			mCurrentFunction->instructions.emplace_back( OpCode::OC_MakeBox, n->index );
 		
 		OpCode opCode;
 		
 		if( keepValue )
 		{
-			switch(nameType)
+			switch(n->semanticType)
 			{
-			case NT_Local:	opCode = OpCode::OC_StoreLocal;	break;
-			case NT_Boxed:	opCode = OpCode::OC_StoreToBox;	break;
-			case NT_Global:	opCode = OpCode::OC_StoreGlobal;break;
-			default: break; // don't store to native
+			case ast::VariableNode::SMT_Local:			opCode = OpCode::OC_StoreLocal;		break;
+			case ast::VariableNode::SMT_Global:			opCode = OpCode::OC_StoreGlobal;	break;
+			case ast::VariableNode::SMT_LocalBoxed:		opCode = OpCode::OC_StoreToBox;		break;
+			case ast::VariableNode::SMT_FreeVariable:	opCode = OpCode::OC_StoreToClosure;	break;
+			default:
+				mLogger.PushError(n->coords, "Cannot store into native variables %d\n", int(n->index));
+				break;
 			}
 		}
 		else
 		{
-			switch(nameType)
+			switch(n->semanticType)
 			{
-			case NT_Local:	opCode = OpCode::OC_PopStoreLocal;	break;
-			case NT_Boxed:	opCode = OpCode::OC_PopStoreToBox;	break;
-			case NT_Global:	opCode = OpCode::OC_PopStoreGlobal;	break;
-			default: break; // don't store to native
+			case ast::VariableNode::SMT_Local:			opCode = OpCode::OC_PopStoreLocal;		break;
+			case ast::VariableNode::SMT_Global:			opCode = OpCode::OC_PopStoreGlobal;		break;
+			case ast::VariableNode::SMT_LocalBoxed:		opCode = OpCode::OC_PopStoreToBox;		break;
+			case ast::VariableNode::SMT_FreeVariable:	opCode = OpCode::OC_PopStoreToClosure;	break;
+			default:
+				mLogger.PushError(n->coords, "Cannot store into native variables %d\n", int(n->index));
+				break;
 			}
 		}
 		
-		mCurrentFunction->instructions.emplace_back( opCode, index );
+		mCurrentFunction->instructions.emplace_back( opCode, n->index );
 	}
 	else
-	{ // The variables: this $ $0 $1 $2 $n $$ and $$[n] shall not be assignable
+	{
+		mLogger.PushError(n->coords, "The variables: this $ $0 $1 $2 $n $$ and $$[n] shall not be assignable\n");
 	}
 }
 
@@ -652,16 +639,6 @@ void Compiler::BuildAssignOp(const ast::Node* node, bool keepValue)
 	
 	if( n->op == T_Assignment )
 	{
-		// in order to allow for recursion, we need to know the name
-		// we are assigning to, before we assign to it
-		const ast::VariableNode* vn = (const ast::VariableNode*)n->lhs;
-		if( vn->variableType == ast::VariableNode::V_Named )
-		{
-			NameType nameType;
-			int index;
-			ResolveName(vn->name, &nameType, &index);
-		}
-		
 		EmitInstructions(n->rhs, true);
 	}
 	else // compound assignment: += -= *= /= ^= %= ~=
@@ -680,7 +657,9 @@ void Compiler::BuildAssignOp(const ast::Node* node, bool keepValue)
 		case T_AssignPower:			binaryOperation = OpCode::OC_Power;			break;
 		case T_AssignModulo:		binaryOperation = OpCode::OC_Modulo;		break;
 		case T_AssignConcatenate:	binaryOperation = OpCode::OC_Concatenate;	break;
-		default: break;
+		default:
+			mLogger.PushError(n->coords, "Invalid assign type %d\n", int(n->op));
+			break;
 		}
 		
 		mCurrentFunction->instructions.emplace_back( binaryOperation );
@@ -693,7 +672,7 @@ void Compiler::BuildAssignOp(const ast::Node* node, bool keepValue)
 		else if( ((const ast::BinaryOperatorNode*)n->lhs)->op == T_Dot )
 			BuildMemberStore(n->lhs, keepValue);
 		else
-		{} // error
+			mLogger.PushError(n->coords, "Invalid assignment\n");
 	}
 	else
 	{
@@ -823,7 +802,9 @@ void Compiler::BuildBinaryOp(const ast::Node* node, bool keepValue)
 	case T_GreaterEqual:	binaryOperation = OpCode::OC_GreaterEqual;	break;
 	case T_LeftBracket:		binaryOperation = OpCode::OC_LoadElement;	break;
 	case T_Dot:				binaryOperation = OpCode::OC_LoadMember;	break;
-	default: break;
+	default:
+		mLogger.PushError(n->coords, "Unknown binary operation %d\n", n->op);
+		break;
 	}
 	
 	mCurrentFunction->instructions.emplace_back( binaryOperation );
@@ -847,7 +828,9 @@ void Compiler::BuildUnaryOp(const ast::Node* node, bool keepValue)
 	case T_Not:			unaryOperation = OpCode::OC_UnaryNot;			break;
 	case T_Concatenate:	unaryOperation = OpCode::OC_UnaryConcatenate;	break;
 	case T_SizeOf:		unaryOperation = OpCode::OC_UnarySizeOf;		break;
-	default: break;
+	default:
+		mLogger.PushError(n->coords, "Unknown unary operation %d\n", n->op);
+		break;
 	}
 	
 	mCurrentFunction->instructions.emplace_back( unaryOperation );
@@ -1056,8 +1039,6 @@ void Compiler::BuildBlock(const ast::Node* node, bool keepValue)
 {
 	const ast::BlockNode* n = (const ast::BlockNode*)node;
 	
-	PushBlockScope();
-	
 	// emit instructions for all nodes
 	int lastNodeIndex = int(n->nodes.size()) - 1;
 	
@@ -1072,23 +1053,28 @@ void Compiler::BuildBlock(const ast::Node* node, bool keepValue)
 	{
 		mCurrentFunction->instructions.emplace_back( OpCode::OC_LoadConstant, 0 );
 	}
-	
-	PopBlockScope();
 }
 
 void Compiler::BuildFunction(const ast::Node* node, bool keepValue)
 {
 	const ast::FunctionNode* n = (const ast::FunctionNode*)node;
 	
-	// new function goes in a new segment
-	int containingFunctionIndex	= mCurrentFunction->index;
-	int thisFunctionIndex		= int(mConstants.size());
+	// new function goes in a new constant
+	int thisFunctionIndex = int(mConstants.size());
 
-	mConstants.emplace_back();
-	mConstants.back().MakeFunction( thisFunctionIndex );
-	mCurrentFunction = mConstants.back().codeSegment;
+	mFunctionContexts.emplace_back();
+	mFunctionContexts.back().index = thisFunctionIndex;
+
+	mConstants.emplace_back(new CodeObject());
+	mCurrentFunction = mConstants.back().codeObject;
 	
-	PushFunctionContext(n);
+	mCurrentFunction->namedParametersCount = int(n->namedParameters.size());
+	mCurrentFunction->localVariablesCount = n->localVariablesCount;
+	mCurrentFunction->closureMapping = n->closureMapping;
+	
+	// if parameters need to be boxed, this is their first occurrence, so we box them right away
+	for( int parameterIndex : n->parametersToBox )
+		mCurrentFunction->instructions.emplace_back( OpCode::OC_MakeBox, parameterIndex );
 	
 	// emit instructions
 	if( n->body && n->body->type == ast::Node::N_Block )
@@ -1097,19 +1083,30 @@ void Compiler::BuildFunction(const ast::Node* node, bool keepValue)
 		EmitInstructions(n->body, true);
 	
 	unsigned endLocation = mCurrentFunction->instructions.size();
+	
 	mCurrentFunction->instructions.emplace_back( OpCode::OC_EndFunction );
 	
-	int boxedLocalsCount = PopFunctionContext(endLocation);
-	
-	// back to old segment
-	mCurrentFunction = mConstants[ containingFunctionIndex ].codeSegment;
-	
-	if( keepValue )
+	// some 'jump' instructions may have needed to know where to jump to
+	for( int i : mFunctionContexts.back().jumpToEndIndices )
 	{
-		mCurrentFunction->instructions.emplace_back( OpCode::OC_LoadConstant, thisFunctionIndex );
-		
-		if( boxedLocalsCount > 0 )
-			mCurrentFunction->instructions.emplace_back( OpCode::OC_MakeClosure, boxedLocalsCount );
+		Instruction& jumpToEndInstruction = mCurrentFunction->instructions[i];
+		jumpToEndInstruction.A = endLocation;
+	}
+	
+	mFunctionContexts.pop_back();
+	
+	// back to old constant
+	if( ! mFunctionContexts.empty() )
+	{
+		mCurrentFunction = mConstants[ mFunctionContexts.back().index ].codeObject;
+	
+		if( keepValue )
+		{
+			mCurrentFunction->instructions.emplace_back( OpCode::OC_LoadConstant, thisFunctionIndex );
+			
+			if( ! n->closureMapping.empty() )
+				mCurrentFunction->instructions.emplace_back( OpCode::OC_MakeClosure );
+		}
 	}
 }
 
@@ -1201,13 +1198,13 @@ bool Compiler::BuildHashLoadOp(const ast::Node* node)
 		}
 		else
 		{
-			// handle error
+			mLogger.PushError(node->coords, "Can only create hash load operation on named variables\n");
 		}
 		
 	}
 	else
 	{
-		// handle error
+		mLogger.PushError(node->coords, "Can only create hash load operation on variables\n");
 	}
 	
 	return false;
@@ -1278,290 +1275,8 @@ void Compiler::BuildJumpStatement(const ast::Node* node)
 			return;
 		}
 	default:
+		mLogger.PushError(node->coords, "Unknown jump statement type %d\n", int(node->type));
 		break;
-	}
-}
-
-void Compiler::PushFunctionContext(const ast::FunctionNode* n)
-{
-	mFunctionContexts.emplace_back();
-	
-	FunctionContext& context = mFunctionContexts.back();
-	
-	context.blockScopes.emplace_back();
-	
-	BlockScope& scope = mFunctionContexts.back().blockScopes.back();
-	
-	for( const std::string& name : n->namedParameters )
-		scope[name] = context.totalIndices++;
-	
-	mCurrentFunction->namedParametersCount = n->namedParameters.size();
-}
-
-int Compiler::PopFunctionContext(int endLocation)
-{
-	FunctionContext& context = mFunctionContexts.back();
-	
-	mCurrentFunction->localVariablesCount = context.totalIndices;
-	
-	// some 'jump' instructions may have needed to know where to jump to
-	for( int i : context.jumpToEndIndices )
-	{
-		Instruction& instruction = mCurrentFunction->instructions[i];
-		instruction.A = endLocation;
-	}
-	
-	// some of the 'Local' instructions may need to become 'Box' instructions
-	// if some nested function referenced them ('asked' for those variables)
-	for( Instruction& instruction : mCurrentFunction->instructions )
-	{
-		if( instruction.opCode == OpCode::OC_LoadLocal )
-		{
-			for( unsigned i : context.localIndicesToBox )
-				if( instruction.A == i )
-					instruction.opCode = OpCode::OC_LoadFromBox;
-		}
-		else if( instruction.opCode == OpCode::OC_StoreLocal )
-		{
-			for( unsigned i : context.localIndicesToBox )
-				if( instruction.A == i )
-					instruction.opCode = OpCode::OC_StoreToBox;
-		}
-		else if( instruction.opCode == OpCode::OC_PopStoreLocal )
-		{
-			for( unsigned i : context.localIndicesToBox )
-				if( instruction.A == i )
-					instruction.opCode = OpCode::OC_PopStoreToBox;
-		}
-	}
-	
-	for( unsigned i : context.localIndicesToBox )
-	{
-		bool notAsked = true;
-		for( const AskedVariable& asked : context.askedVariables )
-		{
-			if( asked.toIndex == i )
-			{
-				notAsked = false;
-				break;
-			}
-		}
-		
-		if( notAsked )
-			context.askedVariables.push_back({-1, int(i)});
-	}
-	
-	int boxedLocalsCount = int(context.localIndicesToBox.size());
-	
-	// save the mapping of locals for the closure
-	if( ! context.askedVariables.empty() )
-		mCurrentFunction->closureMapping = context.askedVariables;
-	
-	// we are done with this context
-	mFunctionContexts.pop_back();
-	
-	return boxedLocalsCount;
-}
-
-void Compiler::PushBlockScope()
-{
-	mFunctionContexts.back().blockScopes.emplace_back();
-}
-
-void Compiler::PopBlockScope()
-{
-	mFunctionContexts.back().blockScopes.pop_back();
-}
-
-void Compiler::ResolveName(const std::string& name, NameType* outType, int* outIndex)
-{
-	if( mFunctionContexts.back().blockScopes.empty() ) // no block so this is a global variable
-	{
-		auto globalNameIt = mGlobalScope.find(name);
-		
-		if( globalNameIt != mGlobalScope.end() )
-		{
-			*outType = NT_Global;
-			*outIndex = globalNameIt->second;
-		}
-		else // didn't find it
-		{
-			auto nativeIt = mNativeFunctions.find(name);
-			
-			if( nativeIt != mNativeFunctions.end() )  // found as a native function
-			{
-				*outType = NT_Native;
-				*outIndex = nativeIt->second;
-			}
-			else // create a new global
-			{
-				mGlobalScope[name] = mTotalGlobalIndices;
-				*outType = NT_Global;
-				*outIndex = mTotalGlobalIndices++;
-			}
-		}
-	}
-	else // it may be in a function scope
-	{
-		// try each of the enclosing function contexts in reverse
-		int functionConstextsCount = int(mFunctionContexts.size());
-		int currentContextIndex = functionConstextsCount - 1;
-		
-		for( int i = currentContextIndex; i >= 0; --i )
-		{
-			std::deque<BlockScope>& blockScopes = mFunctionContexts[i].blockScopes;
-			
-			// try the blocks in the current function context in reverse
-			for( auto scope = blockScopes.rbegin(); scope != blockScopes.rend(); ++scope )
-			{
-				auto localNameIt = scope->find(name);
-				
-				if( localNameIt != scope->end() )
-				{
-					int localIndex = localNameIt->second;
-					
-					*outType	= NT_Local;
-					*outIndex	= localIndex;
-					
-					// we referenced a variable from a function that encloses this one
-					// Later we will have to make sure all other references to that
-					// variable are stored in boxed values.
-					if( i != currentContextIndex )
-					{
-						*outType = NT_Boxed;
-						
-						ResolveBoxed(name, outIndex);
-					}
-					return;
-				}
-			}
-		}
-		
-		// if not the local, try the global scope
-		auto globalNameIt = mGlobalScope.find(name);
-		
-		if( globalNameIt != mGlobalScope.end() )
-		{
-			*outType	= NT_Global;
-			*outIndex	= globalNameIt->second;
-			return;
-		}
-		
-		// it could also be a native constant
-		auto nativeIt = mNativeFunctions.find(name);
-		
-		if( nativeIt != mNativeFunctions.end() )
-		{
-			*outType	= NT_Native;
-			*outIndex	= nativeIt->second;
-			return;
-		}
-		
-		// we didn't find it anywhere, create it locally
-		FunctionContext& context = mFunctionContexts.back();
-		
-		context.blockScopes.back()[name] = context.totalIndices;
-		
-		*outType	= NT_Local;
-		*outIndex	= context.totalIndices++;
-	}
-}
-
-void Compiler::ResolveBoxed(const std::string& name, int* outIndex)
-{
-	// the current function will be "given" this variable
-	FunctionContext* currentContext = &mFunctionContexts.back();
-	
-	currentContext->blockScopes.back()[name] = currentContext->totalIndices;
-	*outIndex = currentContext->totalIndices++;
-	
-	currentContext->localIndicesToBox.push_back(*outIndex);
-	
-	////////////////////////////////////////////////////////////////////////////
-	int localIndex = *outIndex;
-	
-	for( int i = int(mFunctionContexts.size()) - 2; i >= 0; --i ) // skip last
-	{
-		FunctionContext& context = mFunctionContexts[i];
-		
-		bool foundInThisContext = false;
-		
-		std::deque<BlockScope>& blockScopes = context.blockScopes;
-		
-		for( auto scope = blockScopes.rbegin(); scope != blockScopes.rend(); ++scope )
-		{
-			auto localNameIt = scope->find(name);
-			
-			if( localNameIt != scope->end() )
-			{
-				bool alreadyAsked = false;
-				for( const auto& askedVariable : currentContext->askedVariables )
-				{
-					if( askedVariable.toIndex == localIndex )
-					{
-						alreadyAsked = true;
-						break;
-					}
-				}
-				
-				if( !alreadyAsked )
-				{
-					AskedVariable asked;
-					asked.fromIndex = localNameIt->second;
-					asked.toIndex = localIndex;
-					
-					currentContext->askedVariables.push_back(asked);
-					
-					bool alreadyBoxed = false;
-					for( const int index : context.localIndicesToBox )
-					{
-						if( index == localNameIt->second )
-						{
-							alreadyBoxed = true;
-							break;
-						}
-					}
-					
-					if( !alreadyBoxed )
-						context.localIndicesToBox.push_back(localNameIt->second);
-				}
-				
-				foundInThisContext = true;
-				break;
-			}
-		}
-		
-		if( foundInThisContext )
-			break;
-		
-		// The variable came from an "upper" function.
-		// This means that the current function is just transporting it.
-		// It still needs to be saved as a local variable.
-		blockScopes.back()[name] = context.totalIndices;
-		int newIndex = context.totalIndices++;
-		
-		AskedVariable asked;
-		asked.fromIndex = newIndex;
-		asked.toIndex = localIndex;
-		
-		currentContext->askedVariables.push_back(asked);
-		
-		bool alreadyBoxed = false;
-		for( const int index : context.localIndicesToBox )
-		{
-			if( index == newIndex )
-			{
-				alreadyBoxed = true;
-				break;
-			}
-		}
-		
-		if( !alreadyBoxed )
-			context.localIndicesToBox.push_back(newIndex);
-		
-		// The "upper" function will have to deliver into the 'newIndex'
-		localIndex = newIndex;
-		currentContext = &context;
 	}
 }
 
@@ -1595,7 +1310,7 @@ unsigned Compiler::UpdateSymbol(const std::string& name, int globalIndex)
 	return hash;
 }
 
-char* Compiler::BuildBinaryData()
+std::unique_ptr<char[]> Compiler::BuildBinaryData()
 {
 	unsigned symbolsCount = mSymbols.size();
 	unsigned symbolsSize = 0;
@@ -1609,12 +1324,13 @@ char* Compiler::BuildBinaryData()
 	for( unsigned i = mConstantsTotalOffset; i < constantsCount; ++i )
 		constantsSize += mConstants[i].CalculateSize();
 	
+	unsigned totalSize =	3 * sizeof(unsigned) + symbolsSize +
+							3 * sizeof(unsigned) + constantsSize;
 	// allocate data
-	char* binaryData = new char[3 * sizeof(unsigned) + symbolsSize + 
-								3 * sizeof(unsigned) + constantsSize];
+	std::unique_ptr<char[]> binaryData = std::make_unique<char[]>(totalSize);
 	
 	// write symbols size
-	unsigned* p = (unsigned*)binaryData;
+	unsigned* p = (unsigned*)binaryData.get();
 	*p = symbolsSize;
 	
 	// write symbols count
@@ -1626,7 +1342,7 @@ char* Compiler::BuildBinaryData()
 	*p = mSymbolsOffset;
 	
 	// write all symbols
-	char* c = binaryData + 3 * sizeof(unsigned);
+	char* c = binaryData.get() + 3 * sizeof(unsigned);
 	
 	for( unsigned i = mSymbolsOffset; i < symbolsCount; ++i )
 		c = mSymbols[i].WriteSymbol(c);

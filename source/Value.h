@@ -72,7 +72,7 @@ struct Value
 	Value(NativeFunction nativeFunction);
 	
 	Value(const Value& o);
-		
+	
 	bool		IsGarbageCollected() const;
 	bool		IsWhite() const;
 	bool		IsFunction() const;

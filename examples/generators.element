@@ -3,7 +3,7 @@ for( i in ["a", "b", "c"] )
 	print(i)
 
 // you can also convert them explicitly
-g = make_generator([1, 2, 3, 12])
+g = make_generator([1, 2, 3])
 
 for( i in g )
 	print(i)
