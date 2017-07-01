@@ -111,7 +111,7 @@ void Interpreter::SetDebugPrintConstants(bool state)
 
 std::string Interpreter::GetVersion() const
 {
-	return "element interpreter version 0.0.1";
+	return "element interpreter version 0.0.2";
 }
 
 void Interpreter::RegisterNativeFunction(const std::string& name, Value::NativeFunction function)

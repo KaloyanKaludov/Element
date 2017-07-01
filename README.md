@@ -10,6 +10,15 @@ The Element interpreter can interpret only a single source file for now or it
 can also be ran in REPL mode. Project files are provided for Visual Studio
 on Windows and for the Codelite IDE for Linux. No makefile because I am lazy.
 
+### Features
+
+- Integer, Floating point, Boolean, String, Array and Object primitives.
+- Functions, Closures.
+- Block scopes.
+- Standard flow control with if, while, for expressions.
+- Everything is an expression and everything returns a value.
+- Prototype-based OOP.
+- REPL mode.
 
 ### Further development
 
@@ -21,8 +30,6 @@ on Windows and for the Codelite IDE for Linux. No makefile because I am lazy.
 - Underscore variable
 - Allow multiple lines to be entered when in REPL mode
 - Move symbols hashing to the semantic analyzer
-- Find out if variables are local/global/native in the semantic analyzer
-- Better closures implementation
 - Better Garbage Collection/Memory Management
 - Tail recursion
 - Benchmark the performance to find out exactly how slow everything is
@@ -30,16 +37,8 @@ on Windows and for the Codelite IDE for Linux. No makefile because I am lazy.
 - Extend (Create?) a standard library
 
 
-### Potential problems:
+#### Potential problems:
 
 The Codelite project uses the clang compiler, which depending on the Codelite
 version might not be included and so you may have to install it separately.
 Or you can just compile with gcc.
-
-The Codelite project gets compiled with the -m32 flag and so some 64bit linux
-distributions might not have the 32bit libs installed. On my machine I fixed it
-using:
-```
-sudo apt-get install g++-multilib
-```
-Or you can just remove the -m32 flag.
