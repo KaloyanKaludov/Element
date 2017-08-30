@@ -24,6 +24,9 @@ Interpreter::Interpreter()
 	RegisterNativeFunction("print",				nativefunctions::Print);
 	RegisterNativeFunction("to_upper",			nativefunctions::ToUpper);
 	RegisterNativeFunction("to_lower",			nativefunctions::ToLower);
+	RegisterNativeFunction("make_error",		nativefunctions::MakeError);
+	RegisterNativeFunction("is_error",			nativefunctions::IsError);
+	RegisterNativeFunction("make_coroutine",	nativefunctions::MakeCoroutine);
 	RegisterNativeFunction("make_generator",	nativefunctions::MakeGenerator);
 	RegisterNativeFunction("range",				nativefunctions::Range);
 	RegisterNativeFunction("each",				nativefunctions::Each);
@@ -47,43 +50,47 @@ Interpreter::Interpreter()
 	RegisterNativeFunction("tan",				nativefunctions::Tan);
 }
 
-void Interpreter::Interpret(std::istream& input)
+Value Interpreter::Interpret(std::istream& input)
 {
+	Value result;
+
 	std::unique_ptr<ast::FunctionNode> node = mParser.Parse(input);
-	
+
 	if( !mLogger.HasErrorMessages() )
 	{
 		if( mDebugPrintAst )
 			mParser.DebugPrintAST(node.get());
-		
+
 		mSemanticAnalyzer.Analyze(node.get());
-		
+
 		if( !mLogger.HasErrorMessages() )
 		{
 			std::unique_ptr<char[]> bytecode = mCompiler.Compile(node.get());
-			
+
 			if( !mLogger.HasErrorMessages() )
 			{
 				if( mDebugPrintSymbols || mDebugPrintConstants )
 					mCompiler.DebugPrintBytecode(bytecode.get(), mDebugPrintSymbols, mDebugPrintConstants);
-				
-				mVirtualMachine.Execute(bytecode.get());
+
+				result = mVirtualMachine.Execute(bytecode.get());
 			}
 		}
 	}
-	
+
 	if( mLogger.HasErrorMessages() )
 	{
 		mLogger.PrintErrorMessages();
 		mLogger.ClearErrorMessages();
 	}
-	
+
 	mVirtualMachine.ClearError();
+
+	return result;
 }
 
-void Interpreter::Interpret(const char* bytecode)
+Value Interpreter::Interpret(const char* bytecode)
 {
-	mVirtualMachine.Execute(bytecode);
+	Value result = mVirtualMachine.Execute(bytecode);
 
 	if( mLogger.HasErrorMessages() )
 	{
@@ -92,6 +99,8 @@ void Interpreter::Interpret(const char* bytecode)
 	}
 
 	mVirtualMachine.ClearError();
+
+	return result;
 }
 
 void Interpreter::SetDebugPrintAst(bool state)
@@ -111,7 +120,12 @@ void Interpreter::SetDebugPrintConstants(bool state)
 
 std::string Interpreter::GetVersion() const
 {
-	return "element interpreter version 0.0.2";
+	return "element interpreter version 0.0.3";
+}
+
+void Interpreter::GarbageCollect()
+{
+	mVirtualMachine.GetMemoryManager().GarbageCollect();
 }
 
 void Interpreter::RegisterNativeFunction(const std::string& name, Value::NativeFunction function)

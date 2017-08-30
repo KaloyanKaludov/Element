@@ -1,6 +1,6 @@
 #include "Value.h"
 
-#include "DataTypes.h"
+#include "GarbageCollected.h"
 
 namespace element
 {
@@ -77,6 +77,12 @@ Value::Value(NativeFunction nativeFunction)
 {
 }
 
+Value::Value(Error* error)
+: type(VT_Error)
+, error(error)
+{
+}
+
 Value::Value(const Value& o)
 : type(o.type)
 , function(o.function)
@@ -89,11 +95,6 @@ bool Value::IsGarbageCollected() const
 						(type == VT_String && string->state == GarbageCollected::GC_Static) ||
 						(type == VT_Function && function->state == GarbageCollected::GC_Static);
 	return ! NotGC;
-}
-
-bool Value::IsWhite() const
-{
-	return garbageCollected->state <= GarbageCollected::GC_White1;
 }
 
 bool Value::IsFunction() const
@@ -146,6 +147,11 @@ bool Value::IsNativeGenerator() const
 	return type == VT_NativeGenerator;
 }
 
+bool Value::IsError() const
+{
+	return type == VT_Error;
+}
+
 int Value::AsInt() const
 {
 	return type == VT_Int ? integer : int(floatingPoint);
@@ -194,19 +200,21 @@ std::string Value::AsString() const
 		return "<native-generator>";
 	case VT_NativeFunction:
 		return "<native-function>";
-	
+	case VT_Error:
+		return error->errorString;
+
 	case VT_Array:
 	{
 		unsigned size = array->elements.size();
-		
+
 		std::string result = "[";
-		
+
 		if( size > 0 )
 		{
 			for( unsigned i = 0; i < size - 1; ++i )
 			{
 				Value& element = array->elements[i];
-				
+
 				if( element.IsArray() )
 					result += "<array>,";
 				else if( element.IsObject() )
@@ -214,9 +222,9 @@ std::string Value::AsString() const
 				else
 					result += element.AsString() + ", ";
 			}
-			
+
 			Value& element = array->elements[size - 1];
-			
+
 			if( element.IsArray() )
 				result += "<array>";
 			else if( element.IsObject() )
@@ -226,16 +234,16 @@ std::string Value::AsString() const
 		}
 
 		result += "]";
-		
+
 		return result;
 	}
-	
+
 	case VT_Object:
 	{
 		unsigned size = object->members.size();
-		
+
 		std::string result = "[ ";
-		
+
 		if( size > 1 ) // we always have atleast the proto member
 		{
 			for( unsigned i = 1; i < size - 1; ++i )
@@ -248,7 +256,7 @@ std::string Value::AsString() const
 				else
 					result += std::to_string(kvp.hash) + " = " + kvp.value.AsString() + "\n  ";
 			}
-			
+
 			auto& kvp = object->members[size - 1];
 			if( kvp.value.IsArray() )
 				result += std::to_string(kvp.hash) + " = <array>\n";
@@ -261,13 +269,13 @@ std::string Value::AsString() const
 		{
 			result += "=";
 		}
-		
+
 		result += "]";
-		
+
 		return result;
 	}
 	}
-	
+
 	return "<[???]>";
 }
 

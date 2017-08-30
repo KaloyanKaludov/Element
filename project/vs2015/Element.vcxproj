@@ -80,6 +80,7 @@
     <ClCompile Include="..\..\source\Compiler.cpp" />
     <ClCompile Include="..\..\source\Constant.cpp" />
     <ClCompile Include="..\..\source\DataTypes.cpp" />
+    <ClCompile Include="..\..\source\GarbageCollected.cpp" />
     <ClCompile Include="..\..\source\Interpreter.cpp" />
     <ClCompile Include="..\..\source\Lexer.cpp" />
     <ClCompile Include="..\..\source\Logger.cpp" />
@@ -98,6 +99,7 @@
     <ClInclude Include="..\..\source\Compiler.h" />
     <ClInclude Include="..\..\source\Constant.h" />
     <ClInclude Include="..\..\source\DataTypes.h" />
+    <ClInclude Include="..\..\source\GarbageCollected.h" />
     <ClInclude Include="..\..\source\Interpreter.h" />
     <ClInclude Include="..\..\source\Lexer.h" />
     <ClInclude Include="..\..\source\Logger.h" />
@@ -113,12 +115,14 @@
     <ClInclude Include="..\..\source\VirtualMachine.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\examples\arrays.element" />
     <None Include="..\..\examples\basic-types.element" />
     <None Include="..\..\examples\closures.element" />
+    <None Include="..\..\examples\coroutines.element" />
     <None Include="..\..\examples\flow-control.element" />
     <None Include="..\..\examples\functions.element" />
+    <None Include="..\..\examples\gc-tests.element" />
     <None Include="..\..\examples\generators.element" />
-    <None Include="..\..\examples\misc.element" />
     <None Include="..\..\examples\objects.element" />
     <None Include="..\..\examples\test.element" />
   </ItemGroup>

@@ -14,6 +14,7 @@ struct Function;
 struct Box;
 struct Generator;
 struct GarbageCollected;
+struct Error;
 
 class VirtualMachine;
 
@@ -28,17 +29,18 @@ struct Value
 		VT_Bool				= 3,
 		VT_Hash				= 4,
 		VT_NativeFunction	= 5,
-		
+
 		VT_String			= 6,
 		VT_Function			= 7,
 		VT_Array			= 8,
 		VT_Object			= 9,
 		VT_Box				= 10,
 		VT_NativeGenerator	= 11,
+		VT_Error			= 12,
 	};
-	
+
 	Type type;
-	
+
 	typedef Value (*NativeFunction)(VirtualMachine&, std::vector<Value>&);
 
 	union
@@ -54,7 +56,8 @@ struct Value
 		Box*			box;
 		Generator*		nativeGenerator;
 		NativeFunction	nativeFunction;
-		
+		Error*			error;
+
 		GarbageCollected* garbageCollected;
 	};
 
@@ -70,11 +73,11 @@ struct Value
 	Value(Box* box);
 	Value(Generator* nativeGenerator);
 	Value(NativeFunction nativeFunction);
-	
+	Value(Error* error);
+
 	Value(const Value& o);
-	
+
 	bool		IsGarbageCollected() const;
-	bool		IsWhite() const;
 	bool		IsFunction() const;
 	bool		IsArray() const;
 	bool		IsObject() const;
@@ -85,7 +88,8 @@ struct Value
 	bool		IsInt() const;
 	bool		IsBox() const;
 	bool		IsNativeGenerator() const;
-	
+	bool		IsError() const;
+
 	int			AsInt() const;
 	float		AsFloat() const;
 	bool		AsBool() const;

@@ -13,14 +13,16 @@ namespace element
 class Interpreter
 {
 public:			Interpreter();
-	void		Interpret(std::istream& input);
-	void		Interpret(const char* bytecode);
+	Value		Interpret(std::istream& input);
+	Value		Interpret(const char* bytecode);
 
 	void		SetDebugPrintAst(bool state);
 	void		SetDebugPrintSymbols(bool state);
 	void		SetDebugPrintConstants(bool state);
 	std::string	GetVersion() const;
-	
+
+	void		GarbageCollect();
+
 	void		RegisterNativeFunction(const std::string& name, Value::NativeFunction function);
 
 private:

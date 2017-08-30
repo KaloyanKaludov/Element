@@ -64,7 +64,7 @@ StringNode::StringNode(const std::string& value, const SourceCoords& coords)
 {}
 
 
-ArrayNode::ArrayNode(std::vector<Node*>& elements, 
+ArrayNode::ArrayNode(const std::vector<Node*>& elements,
 					 const SourceCoords& coords)
 : Node(N_Array, coords)
 , elements(elements)
@@ -81,7 +81,7 @@ ObjectNode::ObjectNode(const SourceCoords& coords)
 : Node(N_Object, coords)
 {}
 
-ObjectNode::ObjectNode(KeyValuePairs& members, const SourceCoords& coords)
+ObjectNode::ObjectNode(const KeyValuePairs& members, const SourceCoords& coords)
 : Node(N_Object, coords)
 , members(members)
 {}
@@ -97,7 +97,7 @@ ObjectNode::~ObjectNode()
 
 
 FunctionNode::FunctionNode(const NamedParameters& namedParameters,
-						   Node* body, 
+						   Node* body,
 						   const SourceCoords& coords)
 : Node(N_Function, coords)
 , namedParameters(namedParameters)
@@ -112,8 +112,8 @@ FunctionNode::~FunctionNode()
 }
 
 
-FunctionCallNode::FunctionCallNode(Node* function, 
-								   Node* arguments, 
+FunctionCallNode::FunctionCallNode(Node* function,
+								   Node* arguments,
 								   const SourceCoords& coords)
 : Node(N_FunctionCall, coords)
 , function(function)
@@ -127,7 +127,7 @@ FunctionCallNode::~FunctionCallNode()
 }
 
 
-ArgumentsNode::ArgumentsNode(std::vector<Node*>& arguments, 
+ArgumentsNode::ArgumentsNode(std::vector<Node*>& arguments,
 							 const SourceCoords& coords)
 : Node(N_Arguments, coords)
 , arguments(arguments)
@@ -140,8 +140,8 @@ ArgumentsNode::~ArgumentsNode()
 }
 
 
-UnaryOperatorNode::UnaryOperatorNode(Token op, 
-									 Node* operand, 
+UnaryOperatorNode::UnaryOperatorNode(Token op,
+									 Node* operand,
 									 const SourceCoords& coords)
 : Node(N_UnaryOperator, coords)
 , op(op)
@@ -154,9 +154,9 @@ UnaryOperatorNode::~UnaryOperatorNode()
 }
 
 
-BinaryOperatorNode::BinaryOperatorNode(Token op, 
-									   Node* lhs, 
-									   Node* rhs, 
+BinaryOperatorNode::BinaryOperatorNode(Token op,
+									   Node* lhs,
+									   Node* rhs,
 									   const SourceCoords& coords)
 : Node(N_BinaryOperator, coords)
 , op(op)
@@ -171,7 +171,7 @@ BinaryOperatorNode::~BinaryOperatorNode()
 }
 
 
-BlockNode::BlockNode(std::vector<Node*>& nodes, 
+BlockNode::BlockNode(std::vector<Node*>& nodes,
 					 const SourceCoords& coords)
 : Node(N_Block, coords)
 , nodes(nodes)
@@ -186,9 +186,9 @@ BlockNode::~BlockNode()
 }
 
 
-IfNode::IfNode(Node* condition, 
-			   Node* thenPath, 
-			   Node* elsePath, 
+IfNode::IfNode(Node* condition,
+			   Node* thenPath,
+			   Node* elsePath,
 			   const SourceCoords& coords)
 : Node(N_If, coords)
 , condition(condition)
@@ -205,8 +205,8 @@ IfNode::~IfNode()
 }
 
 
-WhileNode::WhileNode(Node* condition, 
-					 Node* body, 
+WhileNode::WhileNode(Node* condition,
+					 Node* body,
 					 const SourceCoords& coords)
 : Node(N_While, coords)
 , condition(condition)
@@ -220,9 +220,9 @@ WhileNode::~WhileNode()
 }
 
 
-ForNode::ForNode(	Node* iterator, 
-					Node* iteratedExpression, 
-					Node* body, 
+ForNode::ForNode(	Node* iterator,
+					Node* iteratedExpression,
+					Node* body,
 					const SourceCoords& coords)
 : Node(N_For, coords)
 , iterator(iterator)
@@ -268,6 +268,18 @@ ContinueNode::ContinueNode(Node* value, const SourceCoords& coords)
 {}
 
 ContinueNode::~ContinueNode()
+{
+	if( value )
+		delete value;
+}
+
+
+YieldNode::YieldNode(Node* value, const SourceCoords& coords)
+: Node(N_Yield, coords)
+, value(value)
+{}
+
+YieldNode::~YieldNode()
 {
 	if( value )
 		delete value;

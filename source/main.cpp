@@ -9,7 +9,7 @@
 int main(int argc, char** argv)
 {
 	element::Interpreter interpreter;
-	
+
 	const char* h0 = "usage: element [ OPTIONS ] ... [ FILE ]\n";
 	const char* h1 = "OPTIONS:\n";
 	const char* h2 = "-h -? --help  : print this help\n";
@@ -17,9 +17,9 @@ int main(int argc, char** argv)
 	const char* h4 = "-dc           : debug print the constants\n";
 	const char* h5 = "-da           : debug print the Abstract Syntax Tree\n";
 	const char* h6 = "-ds           : debug print the generated symbols\n";
-	
+
 	const char* fileString = nullptr;
-	
+
 	for( int i = 1; i < argc; ++i )
 	{
 		if( argv[i][0] == '-' )
@@ -73,14 +73,12 @@ int main(int argc, char** argv)
 			break;
 		}
 	}
-	
+
 	if( fileString ) // parse file
 	{
 		std::ifstream file(fileString);
 
 		interpreter.Interpret(file);
-		
-		std::cin.get(); // keep the terminal open
 	}
 	else // REPL
 	{
@@ -88,18 +86,24 @@ int main(int argc, char** argv)
 		{
 			char cstr[256];
 			std::cout << "\n>> ";
-			
+
 			std::cin.getline(cstr, 256, '\n');
-			
+
 			if( std::cin.eof() )
 				break;
-			
+
 			std::stringstream ss;
 			ss << cstr;
-			
-			interpreter.Interpret(ss);
+
+			element::Value result = interpreter.Interpret(ss);
+
+			std::cout << result.AsString();
+
+			interpreter.GarbageCollect();
 		}
 	}
+
+	interpreter.GarbageCollect();
 
 	return 0;
 }

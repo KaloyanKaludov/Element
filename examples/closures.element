@@ -20,10 +20,7 @@ makeFunctions ::
 	[inc, dec, get]
 }
 
-funcs = makeFunctions()
-inc = funcs[0]
-dec = funcs[1]
-get = funcs[2]
+[inc, dec, get] = makeFunctions()
 
 inc(); inc()
 dec()

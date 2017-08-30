@@ -1,12 +1,12 @@
 #include "MemoryManager.h"
 
+#include <algorithm>
 
 namespace element
 {
 
 MemoryManager::MemoryManager()
 : mHeapHead(nullptr)
-, mGarbageCollectionEnabled(true)
 , mGCStage(GCS_Ready)
 , mCurrentWhite(GarbageCollected::GC_White0)
 , mNextWhite(GarbageCollected::GC_White1)
@@ -18,12 +18,18 @@ MemoryManager::MemoryManager()
 , mHeapFunctionsCount(0)
 , mHeapBoxesCount(0)
 , mHeapGeneratorsCount(0)
+, mHeapErrorsCount(0)
 {
 }
 
 MemoryManager::~MemoryManager()
 {
 	DeleteHeap();
+}
+
+std::vector<Value>& MemoryManager::GetTheGlobals()
+{
+	return mGlobals;
 }
 
 String* MemoryManager::NewString()
@@ -132,6 +138,15 @@ Function* MemoryManager::NewFunction(const Function* other)
 	return newFunction;
 }
 
+Function* MemoryManager::NewCoroutine(const Function* other)
+{
+	Function* newFunction = NewFunction(other);
+
+	newFunction->executionContext = new ExecutionContext();
+
+	return newFunction;
+}
+
 Box* MemoryManager::NewBox()
 {
 	Box* newBox = new Box();
@@ -208,13 +223,42 @@ Generator* MemoryManager::NewGeneratorNative(GeneratorImplementation* newGenerat
 	return generator;
 }
 
-int MemoryManager::GarbageCollectionStepsToSchedule()
+Error* MemoryManager::NewError(const std::string& errorMessage)
 {
-	if( ! IsGarbageCollectionEnabled() )
-		return 0;
-	
-	// some magic code to determine how badly do we need to garbage collect...
-	return 100;
+	Error* newError = new Error(errorMessage);
+
+	newError->state = mNextWhite;
+
+	if( mHeapHead )
+		newError->next = mHeapHead;
+	mHeapHead = newError;
+
+	++mHeapErrorsCount;
+
+	return newError;
+}
+
+ExecutionContext* MemoryManager::NewRootExecutionContext()
+{
+    ExecutionContext* newContext = new ExecutionContext();
+
+    mExecutionContexts.push_back(newContext);
+
+    return newContext;
+}
+
+bool MemoryManager::DeleteRootExecutionContext(ExecutionContext* context)
+{
+	auto it = std::find(mExecutionContexts.begin(), mExecutionContexts.end(), context);
+
+	if( it != mExecutionContexts.end() )
+	{
+		mExecutionContexts.erase(it);
+		delete context;
+		return true;
+	}
+
+	return false;
 }
 
 void MemoryManager::GarbageCollect(int steps)
@@ -222,7 +266,14 @@ void MemoryManager::GarbageCollect(int steps)
 	switch( mGCStage )
 	{
 	case GCS_Ready:
+		mGrayList.clear();
 		std::swap(mCurrentWhite, mNextWhite); // White0 <-> White1
+		mGCStage = GCS_MarkRoots;
+
+	case GCS_MarkRoots:
+		steps = MarkRoots(steps);
+		if( steps <= 0 )
+			return;
 		mGCStage = GCS_Mark;
 
 	case GCS_Mark:
@@ -245,30 +296,17 @@ void MemoryManager::GarbageCollect(int steps)
 	}
 }
 
-void MemoryManager::EnableGarbageCollection(bool enable)
+void MemoryManager::UpdateGcRelationship(GarbageCollected* parent, Value& child)
 {
-	mGarbageCollectionEnabled = enable;
-}
-
-bool MemoryManager::IsGarbageCollectionEnabled() const
-{
-	return mGarbageCollectionEnabled;
-}
-
-bool MemoryManager::IsGarbageCollecting() const
-{
-	return mGCStage != GCS_Ready;
-}
-
-void MemoryManager::ClearGrayList()
-{
-	mGrayList.clear();
-}
-
-void MemoryManager::MakeGray(GarbageCollected* gc)
-{
-	gc->state = GarbageCollected::State::GC_Gray;
-	mGrayList.push_back(gc);
+	// the tri-color invariant states that at no point shall
+	// a black node be directly connected to a white node
+	if( parent->state == GarbageCollected::GC_Black &&
+		child.IsGarbageCollected() &&
+		child.garbageCollected->state == mCurrentWhite )
+	{
+		child.garbageCollected->state = GarbageCollected::State::GC_Gray;
+		mGrayList.push_back( child.garbageCollected );
+	}
 }
 
 unsigned MemoryManager::GetHeapObjectsCount(Value::Type type) const
@@ -281,13 +319,9 @@ unsigned MemoryManager::GetHeapObjectsCount(Value::Type type) const
 	case Value::VT_Function:		return mHeapFunctionsCount;
 	case Value::VT_Box:				return mHeapBoxesCount;
 	case Value::VT_NativeGenerator:	return mHeapGeneratorsCount;
+	case Value::VT_Error:			return mHeapErrorsCount;
 	default:						return 0;
 	}
-}
-
-GarbageCollected::State MemoryManager::GetCurrentWhite() const
-{
-	return mCurrentWhite;
 }
 
 void MemoryManager::DeleteHeap()
@@ -320,10 +354,14 @@ void MemoryManager::FreeGC(GarbageCollected* gc)
 		break;
 
 	case Value::VT_Function:
-		delete (Function*)gc;
+	{
+		Function* f = (Function*)gc;
+		if( f->executionContext )
+			delete f->executionContext;
+		delete f;
 		--mHeapFunctionsCount;
 		break;
-
+	}
 	case Value::VT_Box:
 		delete (Box*)gc;
 		--mHeapBoxesCount;
@@ -334,14 +372,56 @@ void MemoryManager::FreeGC(GarbageCollected* gc)
 		--mHeapGeneratorsCount;
 		break;
 
+	case Value::VT_Error:
+		delete (Error*)gc;
+		--mHeapErrorsCount;
+		break;
+
 	default:
 		break;
 	}
 }
 
+void MemoryManager::MakeGrayIfNeeded(GarbageCollected* gc, int* steps)
+{
+	if( gc->state == mCurrentWhite )
+	{
+		gc->state = GarbageCollected::GC_Gray;
+		mGrayList.push_back(gc);
+
+		*steps -= 1;
+	}
+}
+
+int MemoryManager::MarkRoots(int steps)
+{
+	for( Value& global : mGlobals )
+		if( global.IsGarbageCollected() )
+			MakeGrayIfNeeded(global.garbageCollected, &steps);
+
+	for( ExecutionContext* context : mExecutionContexts )
+	{
+		for( StackFrame& frame : context->stackFrames )
+		{
+			for( Value& local : frame.variables )
+				if( local.IsGarbageCollected() )
+					MakeGrayIfNeeded(local.garbageCollected, &steps);
+
+			for( Value& anonymousParameter : frame.anonymousParameters.elements )
+				if( anonymousParameter.IsGarbageCollected() )
+					MakeGrayIfNeeded(anonymousParameter.garbageCollected, &steps);
+		}
+
+		for( Value& value : context->stack )
+			if( value.IsGarbageCollected() )
+				MakeGrayIfNeeded(value.garbageCollected, &steps);
+	}
+
+	return steps;
+}
+
 int MemoryManager::Mark(int steps)
 {
-	GarbageCollected* gc = nullptr;
 	GarbageCollected* currentObject = nullptr;
 
 	while( ! mGrayList.empty() && steps > 0 )
@@ -355,61 +435,48 @@ int MemoryManager::Mark(int steps)
 		{
 		case Value::VT_Array:
 			for( Value& element : ((Array*)currentObject)->elements )
-			{
 				if( element.IsGarbageCollected() )
-				{
-					gc = element.garbageCollected;
-					if( gc->state == mCurrentWhite )
-					{
-						gc->state = GarbageCollected::GC_Gray;
-						mGrayList.push_back(gc);
-						
-						steps -= 1;
-					}
-				}
-			}
+					MakeGrayIfNeeded(element.garbageCollected, &steps);
 			break;
 
 		case Value::VT_Object:
 			for( Object::Member& member : ((Object*)currentObject)->members )
-			{
 				if( member.value.IsGarbageCollected() )
-				{
-					gc = member.value.garbageCollected;
-					if( gc->state == mCurrentWhite )
-					{
-						gc->state = GarbageCollected::GC_Gray;
-						mGrayList.push_back(gc);
-						
-						steps -= 1;
-					}
-				}
-			}
+					MakeGrayIfNeeded(member.value.garbageCollected, &steps);
 			break;
 
 		case Value::VT_Function:
-			for( Box* box : ((Function*)currentObject)->freeVariables )
+		{
+			Function* function = ((Function*)currentObject);
+			for( Box* box : function->freeVariables )
+				if( box )
+					MakeGrayIfNeeded(box, &steps);
+
+			if( function->executionContext )
 			{
-				if( box && box->state == mCurrentWhite )
+				for( StackFrame& frame : function->executionContext->stackFrames )
 				{
-					box->state = GarbageCollected::GC_Gray;
-					mGrayList.push_back(box);
+					for( Value& local : frame.variables )
+						if( local.IsGarbageCollected() )
+							MakeGrayIfNeeded(local.garbageCollected, &steps);
+
+					for( Value& anonymousParameter : frame.anonymousParameters.elements )
+						if( anonymousParameter.IsGarbageCollected() )
+							MakeGrayIfNeeded(anonymousParameter.garbageCollected, &steps);
 				}
+
+				for( Value& value : function->executionContext->stack )
+					if( value.IsGarbageCollected() )
+						MakeGrayIfNeeded(value.garbageCollected, &steps);
 			}
 			break;
+		}
 
 		case Value::VT_Box:
 		{
 			Value& value = ((Box*)currentObject)->value;
 			if( value.IsGarbageCollected() )
-			{
-				gc = value.garbageCollected;
-				if( gc->state == mCurrentWhite )
-				{
-					gc->state = GarbageCollected::GC_Gray;
-					mGrayList.push_back(gc);
-				}
-			}
+				MakeGrayIfNeeded(value.garbageCollected, &steps);
 			break;
 		}
 
@@ -442,7 +509,7 @@ int MemoryManager::SweepHead(int steps)
 			mCurrentGC = mHeapHead->next;
 			break;
 		}
-		
+
 		steps -= 1;
 	}
 
@@ -465,7 +532,7 @@ int MemoryManager::SweepRest(int steps)
 			mPreviousGC = mCurrentGC;
 			mCurrentGC = mCurrentGC->next;
 		}
-		
+
 		steps -= 1;
 	}
 

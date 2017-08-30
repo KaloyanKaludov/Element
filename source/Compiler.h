@@ -22,11 +22,11 @@ class Compiler
 public:						Compiler(Logger& logger);
 
 	std::unique_ptr<char[]>	Compile(const ast::FunctionNode* node);
-	
+
 	void					ResetState();
-	
+
 	void					DebugPrintBytecode(const char* bytecode, bool printSymbols, bool printConstants) const;
-	
+
 protected:
 	struct FunctionContext
 	{
@@ -46,12 +46,10 @@ protected:
 
 protected:
 	void EmitInstructions	(const ast::Node* node, bool keepValue);
-	
+
 	void BuildConstantLoad	(const ast::Node* node, bool keepValue);
 	void BuildVariableLoad	(const ast::Node* node, bool keepValue);
 	void BuildVariableStore	(const ast::Node* node, bool keepValue);
-	void BuildElementStore	(const ast::Node* node, bool keepValue);
-	void BuildMemberStore	(const ast::Node* node, bool keepValue);
 	void BuildAssignOp		(const ast::Node* node, bool keepValue);
 	void BuildBooleanOp		(const ast::Node* node, bool keepValue);
 	void BuildArrowOp		(const ast::Node* node, bool keepValue);
@@ -66,24 +64,25 @@ protected:
 	void BuildFunctionCall	(const ast::Node* node, bool keepValue);
 	void BuildArray			(const ast::Node* node, bool keepValue);
 	void BuildObject		(const ast::Node* node, bool keepValue);
+	void BuildYield			(const ast::Node* node, bool keepValue);
 	bool BuildHashLoadOp	(const ast::Node* node);
 	void BuildJumpStatement	(const ast::Node* node);
-	
+
 	unsigned UpdateSymbol(const std::string& name, int globalIndex = -1);
-	
+
 	std::unique_ptr<char[]> BuildBinaryData();
 
 private:
 	Logger&						mLogger;
-	
+
 	std::deque<Constant>		mConstants;
 	unsigned					mConstantsTotalOffset;
-	
+
 	std::vector<LoopContext>	mLoopContexts;
 	std::vector<FunctionContext>mFunctionContexts;
-	
+
 	CodeObject*					mCurrentFunction;
-	
+
 	std::map<unsigned, unsigned>mSymbolIndices;
 	std::vector<Symbol>			mSymbols;
 	unsigned					mSymbolsOffset;

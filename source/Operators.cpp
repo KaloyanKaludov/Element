@@ -1,7 +1,5 @@
 #include "Operators.h"
 
-#include <vector>
-
 namespace element
 {
 /*
@@ -11,12 +9,10 @@ left associativity:
 	(a + b) + c
 */
 
-const std::vector<OperatorInfo> OperatorsTable =
+const OperatorInfo OperatorsTable[] =
 {
 //	operator token				isBinary	isRightAssociative	precedence
 	{T_InvalidToken,			false,		false,				0},
-	
-	{T_Comma,					true,		false,				10},
 
 	{T_Assignment,				true,		true,				20},
 	{T_AssignAdd,				true,		true,				20},
@@ -26,10 +22,10 @@ const std::vector<OperatorInfo> OperatorsTable =
 	{T_AssignPower,				true,		true,				20},
 	{T_AssignModulo,			true,		true,				20},
 	{T_AssignConcatenate,		true,		true,				20},
-	
+
 	{T_ArrayPopBack,			true,		true,				24},
 	{T_ArrayPushBack,			true,		true,				25},
-	
+
 	{T_Or,						true,		false,				40},
 
 	{T_And,						true,		false,				50},
@@ -58,9 +54,9 @@ const std::vector<OperatorInfo> OperatorsTable =
 	{T_Subtract,				false,		false,				120},
 	{T_Concatenate,				false,		false,				120},
 	{T_SizeOf,					false,		false,				120},
-	
+
 	{T_Arrow,					true,		false,				130},
-	
+
 	{T_LeftBracket,				false,		false,				150}, // indexing operator
 	{T_LeftParent,				false,		false,				150}, // function call
 	{T_Column,					true,		false,				150}, // function definition with named arguments
@@ -74,8 +70,8 @@ const OperatorInfo& GetOperatorInfo(const Token t, bool isBinary)
 	for( const auto& o : OperatorsTable )
 		if( o.token == t && o.isBinary == isBinary )
 			return o;
-	
-	return OperatorsTable.front();
+
+	return OperatorsTable[0];
 }
 
 }

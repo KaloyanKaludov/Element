@@ -58,6 +58,9 @@
     <ClCompile Include="..\..\source\MemoryManager.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\source\GarbageCollected.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\source\AST.h">
@@ -111,6 +114,9 @@
     <ClInclude Include="..\..\source\MemoryManager.h">
       <Filter>source</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\source\GarbageCollected.h">
+      <Filter>source</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\examples\basic-types.element">
@@ -128,13 +134,19 @@
     <None Include="..\..\examples\generators.element">
       <Filter>examples</Filter>
     </None>
-    <None Include="..\..\examples\misc.element">
-      <Filter>examples</Filter>
-    </None>
     <None Include="..\..\examples\objects.element">
       <Filter>examples</Filter>
     </None>
     <None Include="..\..\examples\test.element">
+      <Filter>examples</Filter>
+    </None>
+    <None Include="..\..\examples\arrays.element">
+      <Filter>examples</Filter>
+    </None>
+    <None Include="..\..\examples\coroutines.element">
+      <Filter>examples</Filter>
+    </None>
+    <None Include="..\..\examples\gc-tests.element">
       <Filter>examples</Filter>
     </None>
   </ItemGroup>

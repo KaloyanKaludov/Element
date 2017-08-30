@@ -1,0 +1,96 @@
+f ::
+{
+    yield 1
+    a = yield 2
+    yield a
+    4
+}
+
+//f() // an yield outside of a coroutine is an error
+
+// first we need to create a new execution context for this coroutine instance
+c = make_coroutine(f)
+
+c()  -> print() // 1
+c()  -> print() // 2
+c(3) -> print() // 3, we feed a value back to the coroutine
+c()  -> print() // 4, the normal return value after the final yield
+c()  -> print() // error "dead-coroutine"
+
+// a typical producer/consumer problem solved using coroutines
+send:(x)
+    yield x
+
+receive:(p)
+    p()
+
+producer ::
+    make_coroutine(::
+        for( i in ["a", "b", "c", "d"] )
+            send(i)
+    )
+
+consumer:(p)
+    while( x = receive(p) )
+        print(x)
+
+producer() -> consumer()
+
+// coroutines can be used to lazily transform data and various other problems
+array_iterator:(array)
+    make_coroutine(::
+    {
+        for( i in array )
+            yield i
+
+        return make_error("dead-coroutine")
+    })
+
+lazy_filter:(c, p)
+    make_coroutine(::while( true )
+    {
+        value = c()
+
+        if( value -> is_error() )
+            return value
+
+        if( p(value) )
+            yield value
+    })
+
+lazy_map:(c, f)
+    make_coroutine(::while( true )
+    {
+        value = c()
+
+        if( value -> is_error() )
+            return value
+
+        yield f(value)
+    })
+
+gather:(c)
+{
+    result = []
+
+    while( true )
+    {
+        value = c()
+
+        if( value -> is_error() )
+        {
+            if( ~value == "dead-coroutine" )
+                return result
+            else
+                return value
+        }
+
+        result << value
+    }
+}
+
+[1,2,3,4,5] -> array_iterator() -> lazy_filter(::$ % 2 == 0) -> lazy_map(::$ + 1) -> gather() -> print()
+
+// we can thus save combinations of transformation for later use
+// transform = ::$ -> lazy_filter(::$ % 2 == 0) -> lazy_map(::$ + 1)
+// [1,2,3,4,5] -> array_iterator() -> transform() -> gather() -> print()

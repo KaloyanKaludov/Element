@@ -1,5 +1,5 @@
-#ifndef _PRECEDENCE_H_INCLUDED_
-#define _PRECEDENCE_H_INCLUDED_
+#ifndef _OPERATORS_H_INCLUDED_
+#define _OPERATORS_H_INCLUDED_
 
 #include "Tokens.h"
 
@@ -18,4 +18,4 @@ const OperatorInfo& GetOperatorInfo(const Token t, bool isBinary);
 
 }
 
-#endif // _PRECEDENCE_H_INCLUDED_
+#endif // _OPERATORS_H_INCLUDED_

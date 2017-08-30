@@ -20,7 +20,7 @@ Value Type(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'type(value)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	Value result = vm.GetMemoryManager().NewString();
 
 	switch( args[0].type )
@@ -55,6 +55,9 @@ Value Type(VirtualMachine& vm, std::vector<Value>& args)
 	case Value::VT_NativeFunction:
 		result.string->str = "native-function";
 		break;
+	case Value::VT_Error:
+		result.string->str = "error";
+		break;
 	default:
 		result.string->str = "<[???]>";
 		break;
@@ -69,27 +72,28 @@ Value ThisCall(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'this_call(function, this, args...)' takes at least two arguments");
 		return Value();
 	}
-	
+
 	Value& function = args[0];
-	
+
 	if( ! function.IsFunction() )
 	{
 		vm.SetError("function 'this_call(function, this, args...)' takes a function as a first argument");
 		return Value();
 	}
-	
+
 	Value& thisObject = args[1];
-	
+
 	if( ! thisObject.IsObject() )
 	{
 		vm.SetError("function 'this_call(function, this, args...)' takes an object as a second argument");
 		return Value();
 	}
-	
+
 	std::vector<Value> thisCallArgs(args.begin() + 2, args.end());
-		
+
+	// TODO: This will create a new execution context. Do we really want that?
 	Value result = vm.CallMemberFunction(thisObject, function, thisCallArgs);
-		
+
 	return result;
 }
 
@@ -97,16 +101,16 @@ Value GarbageCollect(VirtualMachine& vm, std::vector<Value>& args)
 {
 	if( args.empty() )
 	{
-		vm.GarbageCollect();
+		vm.GetMemoryManager().GarbageCollect();
 	}
 	else if( args[0].IsInt() )
 	{
 		int steps = args[0].AsInt();
-		vm.GarbageCollect(steps);
+		vm.GetMemoryManager().GarbageCollect(steps);
 	}
 	else
 	{
-		vm.SetError("function 'garbage_collect(steps)' takes a single integer as argument");
+		vm.SetError("function 'garbage_collect(steps)' takes a single integer as an argument");
 	}
 
 	return Value();
@@ -122,8 +126,9 @@ Value MemoryStats(VirtualMachine& vm, std::vector<Value>& args)
 	int functions	= int(vm.GetMemoryManager().GetHeapObjectsCount(Value::VT_Function));
 	int boxes		= int(vm.GetMemoryManager().GetHeapObjectsCount(Value::VT_Box));
 	int generators	= int(vm.GetMemoryManager().GetHeapObjectsCount(Value::VT_NativeGenerator));
+	int errors		= int(vm.GetMemoryManager().GetHeapObjectsCount(Value::VT_Error));
 
-	int total = strings + arrays + objects + functions + boxes + generators;
+	int total = strings + arrays + objects + functions + boxes + generators + errors;
 
 	vm.SetMember(data, vm.GetHashFromName("heap_strings_count"),	Value(strings));
 	vm.SetMember(data, vm.GetHashFromName("heap_arrays_count"),		Value(arrays));
@@ -131,6 +136,7 @@ Value MemoryStats(VirtualMachine& vm, std::vector<Value>& args)
 	vm.SetMember(data, vm.GetHashFromName("heap_functions_count"),	Value(functions));
 	vm.SetMember(data, vm.GetHashFromName("heap_boxes_count"),		Value(boxes));
 	vm.SetMember(data, vm.GetHashFromName("heap_generators_count"),	Value(generators));
+	vm.SetMember(data, vm.GetHashFromName("heap_errors_count"),		Value(errors));
 	vm.SetMember(data, vm.GetHashFromName("heap_total_count"),		Value(total));
 
 	return data;
@@ -142,7 +148,7 @@ Value Print(VirtualMachine& vm, std::vector<Value>& args)
 	{
 		std::string str = arg.AsString();
 		std::string::size_type pos = str.find('\\');
-		
+
 		while( pos != std::string::npos && pos + 1 < str.size() )
 		{
 			switch( str[pos + 1] )
@@ -152,15 +158,15 @@ Value Print(VirtualMachine& vm, std::vector<Value>& args)
 			case 't': str.replace(pos, 2, "\t"); break;
 			case '\\': str.replace(pos, 2, "\\"); break;
 			}
-			
+
 			pos = str.find('\\');
 		}
-		
+
 		printf("%s", str.c_str());
 	}
-	
+
 	printf("\n");
-	
+
 	return int(args.size());
 }
 
@@ -171,21 +177,21 @@ Value ToUpper(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'to_upper(string)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsString() )
 	{
 		vm.SetError("function 'to_upper(string)' takes a string as argument");
 		return Value();
 	}
-	
+
 	std::locale locale;
 	std::string str = args[0].string->str;
-	
+
 	unsigned size = str.size();
-	
+
 	for( unsigned i = 0; i < size; ++i )
 		str[i] = std::toupper(str[i], locale);
-	
+
 	return vm.GetMemoryManager().NewString(str);
 }
 
@@ -196,22 +202,73 @@ Value ToLower(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'to_lower(string)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsString() )
 	{
 		vm.SetError("function 'to_lower(string)' takes a string as argument");
 		return Value();
 	}
-	
+
 	std::locale locale;
 	std::string str = args[0].string->str;
-	
+
 	unsigned size = str.size();
-	
+
 	for( unsigned i = 0; i < size; ++i )
 		str[i] = std::tolower(str[i], locale);
-	
+
 	return vm.GetMemoryManager().NewString(str);
+}
+
+Value MakeError(VirtualMachine& vm, std::vector<Value>& args)
+{
+	if( args.size() != 1 )
+	{
+		vm.SetError("function 'make_error(message)' takes exactly one argument");
+		return Value();
+	}
+
+	Value::Type type = args[0].type;
+
+	if( type != Value::VT_String )
+	{
+		vm.SetError("function 'make_error(message)' takes only a string as an argument");
+		return Value();
+	}
+
+	const std::string& str = args[0].string->str;
+
+	return vm.GetMemoryManager().NewError(str);
+}
+
+Value IsError(VirtualMachine& vm, std::vector<Value>& args)
+{
+	if( args.size() != 1 )
+	{
+		vm.SetError("function 'is_error(value)' takes exactly one argument");
+		return Value();
+	}
+
+	return args[0].IsError();
+}
+
+Value MakeCoroutine(VirtualMachine& vm, std::vector<Value>& args)
+{
+	if( args.size() != 1 )
+	{
+		vm.SetError("function 'make_coroutine(function)' takes exactly one argument");
+		return Value();
+	}
+
+	Value::Type type = args[0].type;
+
+	if( type != Value::VT_Function )
+	{
+		vm.SetError("function 'make_coroutine(function)' takes only a function as an argument");
+		return Value();
+	}
+
+	return vm.GetMemoryManager().NewCoroutine( args[0].function );
 }
 
 Value MakeGenerator(VirtualMachine& vm, std::vector<Value>& args)
@@ -221,14 +278,14 @@ Value MakeGenerator(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'make_generator(value)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	Value::Type type = args[0].type;
-	
+
 	if( type == Value::VT_Array )
 		return vm.GetMemoryManager().NewGeneratorArray( args[0].array );
 	else if( type == Value::VT_String )
 		return vm.GetMemoryManager().NewGeneratorString( args[0].string );
-	
+
 	vm.SetError("function 'make_generator(value)' takes only arrays and strings as arguments");
 	return Value();
 }
@@ -241,7 +298,7 @@ struct RangeGenerator : public GeneratorImplementation
 
 	virtual bool has_value() override;
 	virtual Value next_value() override;
-	
+
 	virtual void UpdateGrayList(std::deque<GarbageCollected*>& grayList,
 								GarbageCollected::State currentWhite) override;
 };
@@ -272,11 +329,11 @@ Value Range(VirtualMachine& vm, std::vector<Value>& args) // TODO check for reve
 			vm.SetError("function 'range(max)' takes an integer as argument");
 			return Value();
 		}
-		
+
 		RangeGenerator* rangeGenerator = new RangeGenerator();
-		
+
 		rangeGenerator->to = args[0].AsInt();
-		
+
 		return vm.GetMemoryManager().NewGeneratorNative(rangeGenerator);
 	}
 	else if( args.size() == 2 )
@@ -286,12 +343,12 @@ Value Range(VirtualMachine& vm, std::vector<Value>& args) // TODO check for reve
 			vm.SetError("function 'range(min,max)' takes integers as arguments");
 			return Value();
 		}
-		
+
 		RangeGenerator* rangeGenerator = new RangeGenerator();
-		
+
 		rangeGenerator->from = args[0].AsInt();
 		rangeGenerator->to = args[1].AsInt();
-		
+
 		return vm.GetMemoryManager().NewGeneratorNative(rangeGenerator);
 	}
 	else if( args.size() == 3 )
@@ -301,16 +358,16 @@ Value Range(VirtualMachine& vm, std::vector<Value>& args) // TODO check for reve
 			vm.SetError("function 'range(min,max,step)' takes integers as arguments");
 			return Value();
 		}
-		
+
 		RangeGenerator* rangeGenerator = new RangeGenerator();
-		
+
 		rangeGenerator->from = args[0].AsInt();
 		rangeGenerator->to = args[1].AsInt();
 		rangeGenerator->step = args[2].AsInt();
-		
+
 		return vm.GetMemoryManager().NewGeneratorNative(rangeGenerator);
 	}
-	
+
 	vm.SetError("'range' can only be 'range(max)', 'range(min,max)' or 'range(min,max,step)'");
 	return Value();
 }
@@ -322,24 +379,24 @@ Value Each(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'each(iterable, function)' takes exactly two arguments");
 		return Value();
 	}
-	
+
 	Value& function = args[1];
-	
+
 	if( ! function.IsFunction() )
 	{
 		vm.SetError("function 'each(iterable, function)': second argument is not a function");
 		return Value();
 	}
-	
+
 	if( args[0].IsArray() )
 	{
 		auto& array = args[0].array->elements;
-		
+
 		int size = int(array.size());
 		for( int i = 0; i < size; ++i )
 		{
 			vm.CallFunction(function, {array[i], i});
-			
+
 			if( vm.HasError() )
 				return Value();
 		}
@@ -347,11 +404,11 @@ Value Each(VirtualMachine& vm, std::vector<Value>& args)
 	else if( args[0].IsNativeGenerator() )
 	{
 		Generator* generator = args[0].nativeGenerator;
-		
+
 		while( generator->implementation->has_value() )
 		{
 			vm.CallFunction(function, {generator->implementation->next_value()});
-			
+
 			if( vm.HasError() )
 				return Value();
 		}
@@ -359,35 +416,35 @@ Value Each(VirtualMachine& vm, std::vector<Value>& args)
 	else if( args[0].IsObject() )
 	{
 		Value& object = args[0];
-				
+
 		Value has_value = vm.GetMember(object, Symbol::HasValueHash);
-		
+
 		if( ! has_value.IsFunction() )
 		{
 			vm.SetError("function 'each(iterable, function)': iterable doesn't have 'has_value' function");
 			return Value();
 		}
-		
+
 		Value next_value = vm.GetMember(object, Symbol::NextValueHash);
-		
+
 		if( ! next_value.IsFunction() )
 		{
 			vm.SetError("function 'each(iterable, function)': iterable doesn't have 'next_value' function");
 			return Value();
 		}
-		
+
 		while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
 		{
 			if( vm.HasError() )
 				return Value();
-			
+
 			Value nextValue = vm.CallMemberFunction(object, next_value, {});
-			
+
 			if( vm.HasError() )
 				return Value();
-			
+
 			vm.CallFunction(function, {nextValue});
-			
+
 			if( vm.HasError() )
 				return Value();
 		}
@@ -396,7 +453,7 @@ Value Each(VirtualMachine& vm, std::vector<Value>& args)
 	{
 		vm.SetError("function 'each(iterable, function)': iterable must be array, object or native-generator");
 	}
-	
+
 	return Value();
 }
 
@@ -407,16 +464,16 @@ Value Times(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'times(n, function)' takes exactly two arguments");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsInt() )
 	{
 		vm.SetError("function 'times(n, function)': first argument is not an integer");
 		return Value();
 	}
-	
+
 	int times = args[0].AsInt();
 	Value& function = args[1];
-	
+
 	if( ! function.IsFunction() )
 	{
 		vm.SetError("function 'times(n, function)': second argument is not a function");
@@ -426,11 +483,11 @@ Value Times(VirtualMachine& vm, std::vector<Value>& args)
 	for( int i = 0; i < times; ++i )
 	{
 		vm.CallFunction(function, {i});
-		
+
 		if( vm.HasError() )
 			return Value();
 	}
-	
+
 	return Value();
 }
 
@@ -441,35 +498,35 @@ Value Count(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'count(array, function)' takes exactly two arguments");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsArray() )
 	{
 		vm.SetError("function 'count(array, function)': first argument is not an array");
 		return Value();
 	}
-	
+
 	Value& array = args[0];
 	Value& function = args[1];
-	
+
 	if( ! function.IsFunction() )
 	{
 		vm.SetError("function 'count(array, function)': second argument is not a function");
 		return Value();
 	}
-	
+
 	int counter = 0;
 
 	for( const Value& element : array.array->elements )
 	{
 		Value result = vm.CallFunction(function, {element});
-		
+
 		if( vm.HasError() )
 			return Value();
-		
+
 		if( result.AsBool() )
 			++counter;
 	}
-	
+
 	return counter;
 }
 
@@ -480,35 +537,35 @@ Value Map(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'map(array, function)' takes exactly two arguments");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsArray() )
 	{
 		vm.SetError("function 'map(array, function)': first argument is not an array");
 		return Value();
 	}
-	
+
 	auto& array = args[0].array->elements;
 	Value& function = args[1];
-	
+
 	if( ! function.IsFunction() )
 	{
 		vm.SetError("function 'map(array, function)': second argument is not a function");
 		return Value();
 	}
-	
+
 	Value result = vm.GetMemoryManager().NewArray();
-	
+
 	result.array->elements.reserve(array.size());
-	
+
 	int size = int(array.size());
 	for( int i = 0; i < size; ++i )
 	{
 		result.array->elements.push_back( vm.CallFunction(function, {array[i], i}) );
-		
+
 		if( vm.HasError() )
 			return Value();
 	}
-	
+
 	return result;
 }
 
@@ -519,16 +576,16 @@ Value Filter(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'filter(array, predicate)' takes exactly two arguments");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsArray() )
 	{
 		vm.SetError("function 'filter(array, predicate)': first argument is not an array");
 		return Value();
 	}
-	
+
 	auto& array = args[0].array->elements;
 	Value& function = args[1];
-	
+
 	if( ! function.IsFunction() )
 	{
 		vm.SetError("function 'filter(array, predicate)': second argument is not a function");
@@ -541,14 +598,14 @@ Value Filter(VirtualMachine& vm, std::vector<Value>& args)
 	for( int i = 0; i < size; ++i )
 	{
 		bool include = vm.CallFunction(function, {array[i], i}).AsBool();
-		
+
 		if( vm.HasError() )
 			return Value();
-		
+
 		if( include )
 			result.array->elements.push_back(array[i]);
 	}
-	
+
 	return result;
 }
 
@@ -559,15 +616,15 @@ Value Reduce(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'reduce(iterable, function)' takes exactly two arguments");
 		return Value();
 	}
-	
+
 	Value& function = args[1];
-	
+
 	if( ! function.IsFunction() )
 	{
 		vm.SetError("function 'reduce(iterable, function)': second argument is not a function");
 		return Value();
 	}
-	
+
 	Value result;
 
 	if( args[0].IsArray() )
@@ -582,7 +639,7 @@ Value Reduce(VirtualMachine& vm, std::vector<Value>& args)
 			for( int i = 1; i < size; ++i )
 			{
 				result = vm.CallFunction(function, {result, array[i]});
-				
+
 				if( vm.HasError() )
 					return Value();
 			}
@@ -598,7 +655,7 @@ Value Reduce(VirtualMachine& vm, std::vector<Value>& args)
 		while( generator->implementation->has_value() )
 		{
 			result = vm.CallFunction(function, {result, generator->implementation->next_value()});
-			
+
 			if( vm.HasError() )
 				return Value();
 		}
@@ -606,46 +663,46 @@ Value Reduce(VirtualMachine& vm, std::vector<Value>& args)
 	else if( args[0].IsObject() )
 	{
 		Value& object = args[0];
-		
+
 		Value has_value = vm.GetMember(object, Symbol::HasValueHash);
-		
+
 		if( ! has_value.IsFunction() )
 		{
 			vm.SetError("function 'reduce(iterable, function)': iterable doesn't have 'has_value' function");
 			return Value();
 		}
-		
+
 		Value next_value = vm.GetMember(object, Symbol::NextValueHash);
-		
+
 		if( ! next_value.IsFunction() )
 		{
 			vm.SetError("function 'reduce(iterable, function)': iterable doesn't have 'next_value' function");
 			return Value();
 		}
-		
+
 		if( vm.CallMemberFunction(object, has_value, {}).AsBool() )
 		{
 			if( vm.HasError() )
 				return Value();
-			
+
 			result = vm.CallMemberFunction(object, next_value, {});
-			
+
 			if( vm.HasError() )
 				return Value();
 		}
-		
+
 		while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
 		{
 			if( vm.HasError() )
 				return Value();
-			
+
 			Value nextValue = vm.CallMemberFunction(object, next_value, {});
-			
+
 			if( vm.HasError() )
 				return Value();
-			
+
 			result = vm.CallFunction(function, {result, nextValue});
-			
+
 			if( vm.HasError() )
 				return Value();
 		}
@@ -654,7 +711,7 @@ Value Reduce(VirtualMachine& vm, std::vector<Value>& args)
 	{
 		vm.SetError("function 'reduce(iterable, function)': iterable must be array, object or native-generator");
 	}
-	
+
 	return result;
 }
 
@@ -677,7 +734,7 @@ Value All(VirtualMachine& vm, std::vector<Value>& args)
 			for( const Value& element : array )
 				if( !element.AsBool() )
 					return false;
-			
+
 			return true;
 		}
 		else if( argsSize == 2 )
@@ -832,7 +889,7 @@ Value All(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'all(iterable)': iterable must be array, object or native-generator");
 		return Value();
 	}
-	
+
 	return Value();
 }
 
@@ -1039,12 +1096,12 @@ Value Abs(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'abs(number)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsNumber() )
 	{
 		vm.SetError("function 'abs(number)': number must be int or float");
 	}
-	
+
 	if( args[0].IsInt() )
 		return std::abs(args[0].AsInt());
 	return std::abs(args[0].AsFloat());
@@ -1057,12 +1114,12 @@ Value Floor(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'floor(number)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsNumber() )
 	{
 		vm.SetError("function 'floor(number)': number must be int or float");
 	}
-	
+
 	return std::floor(args[0].AsFloat());
 }
 
@@ -1073,12 +1130,12 @@ Value Ceil(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'ceil(number)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsNumber() )
 	{
 		vm.SetError("function 'ceil(number)': number must be int or float");
 	}
-	
+
 	return std::ceil(args[0].AsFloat());
 }
 
@@ -1089,12 +1146,12 @@ Value Round(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'round(number)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsNumber() )
 	{
 		vm.SetError("function 'round(number)': number must be int or float");
 	}
-	
+
 	return std::round(args[0].AsFloat());
 }
 
@@ -1105,12 +1162,12 @@ Value Sqrt(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'sqrt(number)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsNumber() )
 	{
 		vm.SetError("function 'sqrt(number)': number must be int or float");
 	}
-	
+
 	return std::sqrt(args[0].AsFloat());
 }
 
@@ -1121,12 +1178,12 @@ Value Sin(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'sin(number)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsNumber() )
 	{
 		vm.SetError("function 'sin(number)': number must be int or float");
 	}
-	
+
 	return std::sin(args[0].AsFloat());
 }
 
@@ -1137,12 +1194,12 @@ Value Cos(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'cos(number)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsNumber() )
 	{
 		vm.SetError("function 'cos(number)': number must be int or float");
 	}
-	
+
 	return std::cos(args[0].AsFloat());
 }
 
@@ -1153,12 +1210,12 @@ Value Tan(VirtualMachine& vm, std::vector<Value>& args)
 		vm.SetError("function 'tan(number)' takes exactly one argument");
 		return Value();
 	}
-	
+
 	if( ! args[0].IsNumber() )
 	{
 		vm.SetError("function 'tan(number)': number must be int or float");
 	}
-	
+
 	return std::tan(args[0].AsFloat());
 }
 

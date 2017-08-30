@@ -25,9 +25,6 @@ on Windows and for the Codelite IDE for Linux. No makefile because I am lazy.
 - Importing code from files (module system?)
 - Saving and reading bytecode from compiled binary files
 - Access object members by runtime generated string keys
-- Multiple return values from functions
-- Multiple assignment (same as above?)
-- Underscore variable
 - Allow multiple lines to be entered when in REPL mode
 - Move symbols hashing to the semantic analyzer
 - Better Garbage Collection/Memory Management

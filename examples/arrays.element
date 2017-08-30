@@ -1,0 +1,44 @@
+// array definition
+a = [0, 1, 2, 3 , 4, 5]
+
+print(a)
+
+// array access and assignment
+a[0] = a[1] + a[2]
+
+// appending to the end of an array
+a << 6
+
+// removing an element from the end of an array
+a >> v
+
+print(a)
+
+// array concatenation, arrays are heterogeneous
+a += ["some", "strings"]
+
+print(a)
+
+// getting the size of an array
+print( #a )
+
+// arrays can be unpacked into separate values
+b = ["foo", "bar", "baz"]
+
+// this creates two separete variables 'm' and 'n' that hold the first two elements of the array 'b'
+[m, n] = b
+
+print(m)
+print(n)
+
+// swapping their values
+[m, n] = [n, m]
+
+print(m)
+print(n)
+
+// if we don't care about a particular value, we can use '_' to ignore it
+[_, _, p] = b
+
+// thus we get only the third element
+print(p)

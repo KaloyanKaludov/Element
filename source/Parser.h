@@ -20,11 +20,11 @@ namespace ast
 
 class Parser
 {
-public:									Parser(Logger& logger);
-	
-	std::unique_ptr<ast::FunctionNode>	Parse(std::istream& input);
-	
-	void								DebugPrintAST(const ast::Node* root, int indent = 0) const;
+public:		Parser(Logger& logger);
+
+	auto	Parse(std::istream& input) -> std::unique_ptr<ast::FunctionNode>;
+
+	void	DebugPrintAST(const ast::Node* root, int indent = 0) const;
 
 protected:
 	enum ExpressionType
@@ -38,7 +38,7 @@ protected:
 
 		ET_Unknown,
 	};
-	
+
 	struct Operator
 	{
 		Token 			token;
@@ -50,7 +50,7 @@ protected:
 
 protected:
 	ast::Node* ParseExpression();
-	
+
 	ast::Node* ParsePrimary();
 	ast::Node* ParsePrimitive();
 	ast::Node* ParseVarialbe();
@@ -64,14 +64,14 @@ protected:
 	ast::Node* ParseWhile();
 	ast::Node* ParseFor();
 	ast::Node* ParseControlExpression();
-	
+
 	ExpressionType CurrentExpressionType(Token prevToken, Token token) const;
 
-	void FoldOperatorStacks(std::vector<Operator>& operators, 
+	void FoldOperatorStacks(std::vector<Operator>& operators,
 							std::vector<ast::Node*>& operands) const;
-	
+
 	bool IsExpressionTerminator(Token token) const;
-	
+
 private:
 	Logger&	mLogger;
 	Lexer	mLexer;
