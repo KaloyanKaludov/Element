@@ -1,0 +1,75 @@
+TEST_CASE closure creation
+
+adder:(a)
+{
+	:(b) a + b
+}
+
+f = adder(6)
+g = adder(7)
+
+f(5) == 11 and
+g(3) == 10
+
+TEST_CASE closed-over variables are shared among closures
+
+makeFunctions ::
+{
+	c = 0
+	
+	inc :: c += 1
+	dec :: c -= 1
+	get :: c
+
+	[inc, dec, get]
+}
+
+[inc, dec, get] = makeFunctions()
+
+inc(); inc()
+dec()
+inc(); inc()
+
+get() == 3
+
+TEST_CASE anonymous parameters are not closed-over
+
+f ::
+{
+	:: $ + 1
+}
+
+f(7)(8) == 9
+
+TEST_CASE a more complicated variable capture scenario
+A ::
+{
+	a = 1
+	
+	B:(b)
+	{
+		C:(c)
+		{
+			a + b + c
+		}
+	}
+	
+	a += 1
+	
+	return B
+}
+
+A()(3)(4) == 9
+
+TEST_CASE make sure proper indices of named variables are captured
+
+f:(array)
+	[0, 1, 2, 3] -> each(:(i) array[i] = ::i * 2)
+
+a = [7, 8, 9, 10]
+
+f(a)
+
+a[0]() == 0 and
+a[1]() == 2 and
+a[3]() == 6

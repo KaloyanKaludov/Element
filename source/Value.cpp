@@ -65,9 +65,9 @@ Value::Value(Box* box)
 {
 }
 
-Value::Value(Generator* nativeGenerator)
-: type(VT_NativeGenerator)
-, nativeGenerator(nativeGenerator)
+Value::Value(Iterator* iterator)
+: type(VT_Iterator)
+, iterator(iterator)
 {
 }
 
@@ -95,6 +95,11 @@ bool Value::IsGarbageCollected() const
 						(type == VT_String && string->state == GarbageCollected::GC_Static) ||
 						(type == VT_Function && function->state == GarbageCollected::GC_Static);
 	return ! NotGC;
+}
+
+bool Value::IsNil() const
+{
+	return type == VT_Nil;
 }
 
 bool Value::IsFunction() const
@@ -137,14 +142,19 @@ bool Value::IsInt() const
 	return type == VT_Int;
 }
 
+bool Value::IsHash() const
+{
+	return type == VT_Hash;
+}
+
 bool Value::IsBox() const
 {
 	return type == VT_Box;
 }
 
-bool Value::IsNativeGenerator() const
+bool Value::IsIterator() const
 {
-	return type == VT_NativeGenerator;
+	return type == VT_Iterator;
 }
 
 bool Value::IsError() const
@@ -196,8 +206,8 @@ std::string Value::AsString() const
 		return "<function>";
 	case VT_Box:
 		return "<box>";
-	case VT_NativeGenerator:
-		return "<native-generator>";
+	case VT_Iterator:
+		return "<iterator>";
 	case VT_NativeFunction:
 		return "<native-function>";
 	case VT_Error:

@@ -36,9 +36,9 @@ enum OpCode : char
 
 	// arrays
 	OC_MakeArray,			// A is the number of elements to be taken from the stack
-	OC_LoadElement,			// TOS is the index in the TOS1 array
-	OC_StoreElement,		// TOS index, TOS1 array, TOS2 new value
-	OC_PopStoreElement,		// TOS index, TOS1 array, TOS2 new value
+	OC_LoadElement,			// TOS is the index in the TOS1 array or object
+	OC_StoreElement,		// TOS index, TOS1 array or object, TOS2 new value
+	OC_PopStoreElement,		// TOS index, TOS1 array or object, TOS2 new value
 	OC_ArrayPushBack,
 	OC_ArrayPopBack,
 
@@ -50,10 +50,10 @@ enum OpCode : char
 	OC_StoreMember,			// TOS member hash, TOS1 object, TOS2 new value
 	OC_PopStoreMember,		// TOS member hash, TOS1 object, TOS2 new value
 
-	// generators
-	OC_MakeGenerator,		// make a generator object from TOS and replace it at TOS
-	OC_GeneratorHasValue,	// call 'has_value' from the TOS object
-	OC_GeneratorNextValue,	// call 'next_value' from the TOS object
+	// iterators
+	OC_MakeIterator,		// make an iterator object from TOS and replace it at TOS
+	OC_IteratorHasNext,		// call 'has_next' from the TOS object
+	OC_IteratorGetNext,		// call 'get_next' from the TOS object
 
 	// closures
 	OC_MakeBox,				// A is the index of the box that needs to be created

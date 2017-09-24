@@ -220,19 +220,19 @@ WhileNode::~WhileNode()
 }
 
 
-ForNode::ForNode(	Node* iterator,
+ForNode::ForNode(	Node* iteratingVariable,
 					Node* iteratedExpression,
 					Node* body,
 					const SourceCoords& coords)
 : Node(N_For, coords)
-, iterator(iterator)
+, iteratingVariable(iteratingVariable)
 , iteratedExpression(iteratedExpression)
 , body(body)
 {}
 
 ForNode::~ForNode()
 {
-	delete iterator;
+	delete iteratingVariable;
 	delete iteratedExpression;
 	delete body;
 }

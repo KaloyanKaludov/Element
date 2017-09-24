@@ -15,6 +15,8 @@ class Interpreter
 public:			Interpreter();
 	Value		Interpret(std::istream& input);
 	Value		Interpret(const char* bytecode);
+	
+	void		ResetState();
 
 	void		SetDebugPrintAst(bool state);
 	void		SetDebugPrintSymbols(bool state);
@@ -24,6 +26,9 @@ public:			Interpreter();
 	void		GarbageCollect();
 
 	void		RegisterNativeFunction(const std::string& name, Value::NativeFunction function);
+
+protected:
+	void		RegisterStandardNativeFunctions();
 
 private:
 	Logger				mLogger;

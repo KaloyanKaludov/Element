@@ -12,8 +12,8 @@ struct Symbol
 	static unsigned HashStep(unsigned key);
 	
 	static const unsigned ProtoHash;
-	static const unsigned HasValueHash;
-	static const unsigned NextValueHash;
+	static const unsigned HasNextHash;
+	static const unsigned GetNextHash;
 	
 	std::string	name;
 	unsigned	hash;

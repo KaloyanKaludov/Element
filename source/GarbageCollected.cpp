@@ -1,5 +1,8 @@
 #include "GarbageCollected.h"
 
+#include "DataTypes.h"
+#include "VirtualMachine.h"
+
 namespace element
 {
 
@@ -95,33 +98,39 @@ Function::Function(const Function* o)
 }
 
 
-Generator::Generator(GeneratorImplementation* implementation)
-: GarbageCollected(Value::VT_NativeGenerator)
+Iterator::Iterator(IteratorImplementation* implementation)
+: GarbageCollected(Value::VT_Iterator)
 , implementation(implementation)
-{}
+{
+	if( implementation->thisObjectUsed.IsNil() )
+		implementation->thisObjectUsed = Value(this);
+}
 
-Generator::~Generator()
+Iterator::~Iterator()
 {
 	delete implementation; // virtual call
 }
 
 
-ArrayGenerator::ArrayGenerator(Array* array)
+ArrayIterator::ArrayIterator(Array* array)
 : array(array)
 {
+	hasNextFunction = Value([](VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args) -> Value
+	{
+		ArrayIterator* self = static_cast<ArrayIterator*>(thisObject.iterator->implementation);
+		
+		return self->currentIndex < self->array->elements.size();
+	});
+	
+	getNextFunction = Value([](VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args) -> Value
+	{
+		ArrayIterator* self = static_cast<ArrayIterator*>(thisObject.iterator->implementation);
+		
+		return self->array->elements[self->currentIndex++];
+	});
 }
 
-bool ArrayGenerator::has_value()
-{
-	return currentIndex < array->elements.size();
-}
-
-Value ArrayGenerator::next_value()
-{
-	return array->elements[currentIndex++];
-}
-
-void ArrayGenerator::UpdateGrayList(std::deque<GarbageCollected*>& grayList,
+void ArrayIterator::UpdateGrayList(std::deque<GarbageCollected*>& grayList,
 									GarbageCollected::State currentWhite)
 {
 	if( array->state == currentWhite )
@@ -129,26 +138,66 @@ void ArrayGenerator::UpdateGrayList(std::deque<GarbageCollected*>& grayList,
 }
 
 
-StringGenerator::StringGenerator(String* str)
+StringIterator::StringIterator(String* str)
 : str(str)
 {
+	hasNextFunction = Value([](VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args) -> Value
+	{
+		StringIterator* self = static_cast<StringIterator*>(thisObject.iterator->implementation);
+		
+		return self->currentIndex < self->str->str.size();
+	});
+	
+	getNextFunction = Value([](VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args) -> Value
+	{
+		StringIterator* self = static_cast<StringIterator*>(thisObject.iterator->implementation);
+		
+		char c = self->str->str[self->currentIndex++];
+		
+		return vm.GetMemoryManager().NewString(&c, 1);
+	});
 }
 
-bool StringGenerator::has_value()
-{
-	return currentIndex < str->str.size();
-}
-
-Value StringGenerator::next_value()
-{
-	return int(str->str[currentIndex++]); // as ASCII character codes...
-}
-
-void StringGenerator::UpdateGrayList(std::deque<GarbageCollected*>& grayList,
+void StringIterator::UpdateGrayList(std::deque<GarbageCollected*>& grayList,
 									 GarbageCollected::State currentWhite)
 {
 	if( str->state == currentWhite )
 		grayList.push_back(str);
+}
+
+
+ObjectIterator::ObjectIterator(const Value& object, const Value& hasNext, const Value& getNext)
+{
+	thisObjectUsed	= object;
+	hasNextFunction	= hasNext;
+	getNextFunction	= getNext;
+}
+
+void ObjectIterator::UpdateGrayList(std::deque<GarbageCollected*>& grayList,
+									GarbageCollected::State currentWhite)
+{
+	if( thisObjectUsed.object->state == currentWhite )
+		grayList.push_back(thisObjectUsed.object);
+}
+
+
+CoroutineIterator::CoroutineIterator(Function* coroutine)
+{
+	hasNextFunction = Value([](VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args) -> Value
+	{
+		CoroutineIterator* self = static_cast<CoroutineIterator*>(thisObject.iterator->implementation);
+		
+		return self->getNextFunction.function->executionContext->state != ExecutionContext::CRS_Finished;
+	});
+	
+	getNextFunction = coroutine;
+}
+
+void CoroutineIterator::UpdateGrayList(std::deque<GarbageCollected*>& grayList,
+									GarbageCollected::State currentWhite)
+{
+	if( getNextFunction.function->state == currentWhite )
+		grayList.push_back(getNextFunction.function);
 }
 
 }

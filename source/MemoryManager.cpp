@@ -17,7 +17,7 @@ MemoryManager::MemoryManager()
 , mHeapObjectsCount(0)
 , mHeapFunctionsCount(0)
 , mHeapBoxesCount(0)
-, mHeapGeneratorsCount(0)
+, mHeapIteratorsCount(0)
 , mHeapErrorsCount(0)
 {
 }
@@ -25,6 +25,28 @@ MemoryManager::MemoryManager()
 MemoryManager::~MemoryManager()
 {
 	DeleteHeap();
+}
+
+void MemoryManager::ResetState()
+{
+	mGlobals.clear();
+	mExecutionContexts.clear();
+	
+	DeleteHeap();
+	
+	mGCStage		= GCS_Ready;
+	mCurrentWhite	= GarbageCollected::GC_White0;
+	mNextWhite		= GarbageCollected::GC_White1;
+	mPreviousGC		= nullptr;
+	mCurrentGC		= nullptr;
+	
+	mHeapStringsCount	= 0;
+	mHeapArraysCount	= 0;
+	mHeapObjectsCount	= 0;
+	mHeapFunctionsCount	= 0;
+	mHeapBoxesCount		= 0;
+	mHeapIteratorsCount = 0;
+	mHeapErrorsCount	= 0;
 }
 
 std::vector<Value>& MemoryManager::GetTheGlobals()
@@ -178,49 +200,19 @@ Box* MemoryManager::NewBox(const Value& value)
 	return newBox;
 }
 
-Generator* MemoryManager::NewGeneratorArray(Array* array)
+Iterator* MemoryManager::NewIterator(IteratorImplementation* newIterator)
 {
-	Generator* newGenerator = new Generator(new ArrayGenerator(array));
+	Iterator* iterator = new Iterator(newIterator);
 
-	newGenerator->state = mNextWhite;
+	iterator->state = mNextWhite;
 
 	if( mHeapHead )
-		newGenerator->next = mHeapHead;
-	mHeapHead = newGenerator;
+		iterator->next = mHeapHead;
+	mHeapHead = iterator;
 
-	++mHeapGeneratorsCount;
+	++mHeapIteratorsCount;
 
-	return newGenerator;
-}
-
-Generator* MemoryManager::NewGeneratorString(String* str)
-{
-	Generator* newGenerator = new Generator(new StringGenerator(str));
-
-	newGenerator->state = mNextWhite;
-
-	if( mHeapHead )
-		newGenerator->next = mHeapHead;
-	mHeapHead = newGenerator;
-
-	++mHeapGeneratorsCount;
-
-	return newGenerator;
-}
-
-Generator* MemoryManager::NewGeneratorNative(GeneratorImplementation* newGenerator)
-{
-	Generator* generator = new Generator(newGenerator);
-
-	generator->state = mNextWhite;
-
-	if( mHeapHead )
-		generator->next = mHeapHead;
-	mHeapHead = generator;
-
-	++mHeapGeneratorsCount;
-
-	return generator;
+	return iterator;
 }
 
 Error* MemoryManager::NewError(const std::string& errorMessage)
@@ -296,7 +288,7 @@ void MemoryManager::GarbageCollect(int steps)
 	}
 }
 
-void MemoryManager::UpdateGcRelationship(GarbageCollected* parent, Value& child)
+void MemoryManager::UpdateGcRelationship(GarbageCollected* parent, const Value& child)
 {
 	// the tri-color invariant states that at no point shall
 	// a black node be directly connected to a white node
@@ -309,18 +301,18 @@ void MemoryManager::UpdateGcRelationship(GarbageCollected* parent, Value& child)
 	}
 }
 
-unsigned MemoryManager::GetHeapObjectsCount(Value::Type type) const
+int MemoryManager::GetHeapObjectsCount(Value::Type type) const
 {
 	switch( type )
 	{
-	case Value::VT_String:			return mHeapStringsCount;
-	case Value::VT_Array:			return mHeapArraysCount;
-	case Value::VT_Object:			return mHeapObjectsCount;
-	case Value::VT_Function:		return mHeapFunctionsCount;
-	case Value::VT_Box:				return mHeapBoxesCount;
-	case Value::VT_NativeGenerator:	return mHeapGeneratorsCount;
-	case Value::VT_Error:			return mHeapErrorsCount;
-	default:						return 0;
+	case Value::VT_String:		return mHeapStringsCount;
+	case Value::VT_Array:		return mHeapArraysCount;
+	case Value::VT_Object:		return mHeapObjectsCount;
+	case Value::VT_Function:	return mHeapFunctionsCount;
+	case Value::VT_Box:			return mHeapBoxesCount;
+	case Value::VT_Iterator:	return mHeapIteratorsCount;
+	case Value::VT_Error:		return mHeapErrorsCount;
+	default:					return 0;
 	}
 }
 
@@ -367,9 +359,9 @@ void MemoryManager::FreeGC(GarbageCollected* gc)
 		--mHeapBoxesCount;
 		break;
 
-	case Value::VT_NativeGenerator:
-		delete (Generator*)gc; // virtual call
-		--mHeapGeneratorsCount;
+	case Value::VT_Iterator:
+		delete (Iterator*)gc; // virtual call
+		--mHeapIteratorsCount;
 		break;
 
 	case Value::VT_Error:
@@ -480,8 +472,8 @@ int MemoryManager::Mark(int steps)
 			break;
 		}
 
-		case Value::VT_NativeGenerator:
-			((Generator*)currentObject)->implementation->UpdateGrayList(mGrayList, mCurrentWhite); // virtual call
+		case Value::VT_Iterator:
+			((Iterator*)currentObject)->implementation->UpdateGrayList(mGrayList, mCurrentWhite); // virtual call
 			break;
 
 		default:

@@ -8,12 +8,14 @@ It is implemented in C++ without any external dependencies a part from STL.
 It has its own virtual machine, mostly inspired by Python's VM.
 The Element interpreter can interpret only a single source file for now or it
 can also be ran in REPL mode. Project files are provided for Visual Studio
-on Windows and for the Codelite IDE for Linux. No makefile because I am lazy.
+on Windows and for the Codelite IDE for Linux. And a basic make file.
 
 ### Features
 
 - Integer, Floating point, Boolean, String, Array and Object primitives.
-- Functions, Closures.
+- Functions.
+- Closures.
+- Coroutines.
 - Block scopes.
 - Standard flow control with if, while, for expressions.
 - Everything is an expression and everything returns a value.
@@ -24,7 +26,6 @@ on Windows and for the Codelite IDE for Linux. No makefile because I am lazy.
 
 - Importing code from files (module system?)
 - Saving and reading bytecode from compiled binary files
-- Access object members by runtime generated string keys
 - Allow multiple lines to be entered when in REPL mode
 - Move symbols hashing to the semantic analyzer
 - Better Garbage Collection/Memory Management

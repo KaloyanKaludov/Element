@@ -242,11 +242,11 @@ struct WhileNode : public Node
 
 struct ForNode : public Node
 {
-	Node* iterator;
+	Node* iteratingVariable;
 	Node* iteratedExpression;
 	Node* body;
 
-	ForNode(Node* iterator,
+	ForNode(Node* iteratingVariable,
 			Node* iteratedExpression,
 			Node* body,
 			const SourceCoords& coords);

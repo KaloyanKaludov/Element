@@ -35,6 +35,8 @@ public:					Lexer(Logger& logger);
 	void				DebugPrintToken(Token token) const;
 	
 protected:
+	void Reset();
+	
 	char GetNextChar();
 	
 	bool HandleCommentOrDivision();

@@ -14,6 +14,8 @@ class MemoryManager
 {
 public:					MemoryManager();
 						~MemoryManager();
+						
+	void				ResetState();
 
 	std::vector<Value>&	GetTheGlobals();
 
@@ -27,9 +29,7 @@ public:					MemoryManager();
 	Function*			NewCoroutine(const Function* other);
 	Box*				NewBox();
 	Box*				NewBox(const Value& value);
-	Generator*			NewGeneratorArray(Array* array);
-	Generator*			NewGeneratorString(String* str);
-	Generator*			NewGeneratorNative(GeneratorImplementation* newGenerator);
+	Iterator*			NewIterator(IteratorImplementation* newIterator);
 	Error*				NewError(const std::string& errorMessage);
 
 	ExecutionContext*	NewRootExecutionContext();
@@ -37,9 +37,9 @@ public:					MemoryManager();
 
 	void				GarbageCollect(int steps = std::numeric_limits<int>::max());
 
-	void				UpdateGcRelationship(GarbageCollected* parent, Value& child);
+	void				UpdateGcRelationship(GarbageCollected* parent, const Value& child);
 
-	unsigned			GetHeapObjectsCount(Value::Type type) const;
+	int					GetHeapObjectsCount(Value::Type type) const;
 
 protected:
 	enum GCStage : char
@@ -76,13 +76,13 @@ private:
 	std::vector<ExecutionContext*>	mExecutionContexts;
 
 	// statistics
-	unsigned						mHeapStringsCount;
-	unsigned						mHeapArraysCount;
-	unsigned						mHeapObjectsCount;
-	unsigned						mHeapFunctionsCount;
-	unsigned						mHeapBoxesCount;
-	unsigned						mHeapGeneratorsCount;
-	unsigned						mHeapErrorsCount;
+	int								mHeapStringsCount;
+	int								mHeapArraysCount;
+	int								mHeapObjectsCount;
+	int								mHeapFunctionsCount;
+	int								mHeapBoxesCount;
+	int								mHeapIteratorsCount;
+	int								mHeapErrorsCount;
 };
 
 }

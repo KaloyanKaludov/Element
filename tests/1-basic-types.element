@@ -1,0 +1,290 @@
+TEST_CASE boolean logic 1
+
+true
+
+TEST_CASE boolean logic 2
+
+(not false) == true
+
+TEST_CASE boolean logic 3
+
+(not not true) == true
+
+TEST_CASE boolean logic 4
+
+(true and false) == false
+
+TEST_CASE boolean logic 5
+
+(true and true) == true
+
+TEST_CASE boolean logic 6
+
+(false and false) == false
+
+TEST_CASE boolean logic 7
+
+(false or false) == false
+
+TEST_CASE boolean logic 8
+
+(false or true) == true
+
+TEST_CASE boolean logic 9
+
+(false xor true) == true
+
+TEST_CASE boolean logic 10
+
+(true xor true) == false
+
+TEST_CASE boolean logic 11
+
+(false xor false) == false
+
+TEST_CASE boolean logic with nil 1
+
+nil != false
+
+TEST_CASE boolean logic with nil 2
+
+nil != true
+
+TEST_CASE boolean logic with nil 3
+
+not nil == true
+
+TEST_CASE boolean associativity 1
+
+(true and true or false) == true
+
+TEST_CASE boolean associativity 2
+
+(true and false or false) == false
+
+TEST_CASE math comparisons 1
+
+1 < 2
+
+TEST_CASE math comparisons 2
+
+11 > 22 == false
+
+TEST_CASE math comparisons 3
+
+7 <= 8
+
+TEST_CASE math comparisons 4
+
+8 <= 8
+
+TEST_CASE math comparisons 5
+
+17 >= 8
+
+TEST_CASE math comparisons 6
+
+81 >= 81
+
+TEST_CASE math comparisons 7
+
+3.14 > 2.16
+
+TEST_CASE math comparisons 8
+
+3.14 < 2.101 == false
+
+TEST_CASE integer math 1
+
+1 + 3 == 4
+
+TEST_CASE integer math 2
+
+2 - 9 == -7
+
+TEST_CASE integer math 3
+
+3 * 2 == 6
+
+TEST_CASE integer math 4
+
+4 / 2 == 2
+
+TEST_CASE integer math 5
+
+5 / 2 == 2
+
+TEST_CASE integer math 6
+
+5 % 2 == 1
+
+TEST_CASE integer math 7
+
+6 ^ 2 == 36
+
+TEST_CASE floating point math 1
+
+f = 1.1 + 3.1
+
+f > 4.1 and f < 4.3
+
+TEST_CASE floating point math 2
+
+f = 2.1 - 9.1
+
+f > -7.1 and f < -6.9
+
+TEST_CASE floating point math 3
+
+f = 3.1 * 2.1
+
+f > 6.4 and f < 6.6
+
+TEST_CASE floating point math 4
+
+f = 4.0 / 2.0
+
+f > 1.9 and f < 2.1
+
+TEST_CASE floating point math 5
+
+f = 5.0 / 2.0
+
+f > 2.4 and f < 2.6
+
+TEST_CASE floating point math 6
+
+f = 5.0 % 2.0
+
+f > 0.9 and f < 1.1
+
+TEST_CASE floating point math 7
+
+f = 6.0 ^ 1.5
+
+f > 14.5 and f < 14.8
+
+TEST_CASE math operator associativity 1
+
+2 + 3 * 4 == 14
+
+TEST_CASE math operator associativity 2
+
+8 / 4 - 1 == 1
+
+TEST_CASE math operator associativity 3
+
+(2 + 3) * 4 == 20
+
+TEST_CASE math operator associativity 4
+
+8 / (4 - 1) == 2
+
+TEST_CASE MUST_BE_ERROR nil does not work in math 1
+
+nil + 1
+
+TEST_CASE MUST_BE_ERROR nil does not work in math 2
+
+nil * 2
+
+TEST_CASE MUST_BE_ERROR nil does not work in math 3
+
+nil / 4.5
+
+TEST_CASE string creation and comparison
+
+s = "def"
+s == "def"
+
+TEST_CASE string size
+
+s = "1234"
+
+#s == 4
+
+TEST_CASE string comparison
+
+"def" != "abc"
+
+TEST_CASE string concatenation
+
+"def" ~ "abc" == "defabc"
+
+TEST_CASE string conversions 1
+
+~123 == "123"
+
+TEST_CASE string conversions 2
+
+~5.3 -> type() == "string"
+
+TEST_CASE string conversions 3
+
+~nil == "nil"
+
+TEST_CASE string conversions 4
+
+~true == "true"
+
+TEST_CASE string conversions 5
+
+~false == "false"
+
+TEST_CASE size of string
+
+#"tttt" == 4
+
+TEST_CASE uninitialized variable
+
+a == nil
+
+TEST_CASE make error
+
+make_error("Error!") -> type() == "error"
+
+TEST_CASE error to string
+
+~make_error("Error!") == "Error!"
+
+TEST_CASE error comparison
+
+a = make_error("Error!")
+b = make_error("Error!")
+
+a == b
+
+TEST_CASE error is not convertible to any other type
+
+e = make_error("Error!!")
+
+e != true  and
+e != false and
+e != nil   and
+e != 4     and
+e != 7.1   and
+e != "Error!!"
+
+TEST_CASE identify types
+
+n = nil
+i = 42
+f = 3.1415926
+b = true
+s = "string"
+a = [1, 2, 3, "a", "b"]
+o = [x=3, y=4]
+p = :(arg){ print(arg) }
+g = range(1, 5)
+e = make_error("error!")
+
+type(n) == "nil" and
+type(i) == "int" and
+type(f) == "float" and
+type(b) == "bool" and
+type(s) == "string" and
+type(a) == "array" and
+type(o) == "object" and
+type(p) == "function" and
+type(g) == "iterator" and
+type(e) == "error"

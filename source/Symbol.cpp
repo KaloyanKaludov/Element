@@ -22,8 +22,8 @@ unsigned Symbol::HashStep(unsigned hash)
 }
 
 const unsigned Symbol::ProtoHash = 0;
-const unsigned Symbol::HasValueHash = Symbol::Hash("has_value");
-const unsigned Symbol::NextValueHash = Symbol::Hash("next_value");
+const unsigned Symbol::HasNextHash = Symbol::Hash("has_next");
+const unsigned Symbol::GetNextHash = Symbol::Hash("get_next");
 
 
 Symbol::Symbol()

@@ -1,0 +1,282 @@
+TEST_CASE single line comment
+
+// comment
+true
+
+TEST_CASE multi-line comment
+
+/*
+comment
+*/
+true
+
+TEST_CASE nested multi-line comments
+
+/*
+	comment
+	/*
+		some nested comment
+	*/
+*/
+true
+
+TEST_CASE MUST_BE_ERROR multi-line comment not terminated
+
+/*
+	comment
+	/*
+		some nested comment
+	*/
+
+TEST_CASE variable definition
+
+a = 11
+
+a == 11
+
+TEST_CASE operators
+
+a = 1 + 2 * 3 - 4 / 5 % 6 ^ 7
+
+TEST_CASE operators on multiple lines
+
+a =	1 +
+	2 * 3 - 4 /
+	5 % 6 ^
+	7
+
+TEST_CASE MUST_BE_ERROR when operators are on multiple lines the operator must end the previous line
+
+a =	1
+	* 2
+
+TEST_CASE unary operator on the next line is not part of the expression
+
+a =	1
+	- 2
+
+a == 1
+
+TEST_CASE multiple unary minuses
+
+----9 == 9
+
+TEST_CASE unary plus
+
++8 == 8
+
+TEST_CASE multiple unary pluses and minuses
+
+-+--+9 == +-9
+
+TEST_CASE MUST_BE_ERROR bad operator sequence 1
+
+-+/9
+
+TEST_CASE MUST_BE_ERROR bad operator sequence 2
+
+/-/-
+
+TEST_CASE block
+
+{}
+true
+
+TEST_CASE nested blocks
+
+{
+	{}
+	{{}}
+	{
+		{}
+	}
+}
+true
+
+TEST_CASE MUST_BE_ERROR unbalanced blocks
+
+{
+	{
+		{
+	}
+}
+
+TEST_CASE MUST_BE_ERROR unbalanced parenthesis
+
+((a)
+
+TEST_CASE function assignment 1
+
+f :: 11
+
+TEST_CASE MUST_BE_ERROR function assignment 2
+
+f : : 11
+
+TEST_CASE function assignment 3
+
+f ::
+	12
+
+TEST_CASE function assignment 4
+
+f :() 13
+
+TEST_CASE function assignment 5
+
+f = :() 14
+
+TEST_CASE function assignment 6
+
+f = :(
+) 15
+
+TEST_CASE function assignment 7
+
+f = :
+(
+) 16
+
+TEST_CASE function assignment 8
+
+f = :(a, b) 16 + a + b
+
+TEST_CASE function assignment 9
+
+f = :(a
+, b) a + b
+
+TEST_CASE function assignment 10
+
+f = :(a,
+b) a + b
+
+TEST_CASE MUST_BE_ERROR function assignment 11 missing parameter
+
+f = :(a,, b) a + b
+
+TEST_CASE function assignment 12 trailing comma
+
+f = :(a, b,) a + b
+
+TEST_CASE MUST_BE_ERROR function assignment 13 missing comma
+
+f = :(a b, c) a + b + c
+
+TEST_CASE string definition 1
+
+a = "abc"
+
+a == "abc"
+
+TEST_CASE string definition 2 TODO: handle escape characters
+
+a = "
+abc"
+
+a == "
+abc"
+
+TEST_CASE array definition 1
+
+[1, 2, 3]
+
+TEST_CASE array definition 2 with trailing comma
+
+[1, 2, 3,]
+
+TEST_CASE MUST_BE_ERROR array definition 3 missing element
+
+[1,, 2, 3]
+
+TEST_CASE MUST_BE_ERROR array definition 4 no comma between elements
+
+[1, 2 3]
+
+TEST_CASE array definition 5
+
+[1,
+2
+, 3
+]
+
+TEST_CASE array definition 6
+
+[
+1
+,
+2,
+]
+
+TEST_CASE object definition 1
+
+[x=1, y=2, z=3]
+
+TEST_CASE object definition 2 with trailing comma
+
+[x=1, y=2, z=3,]
+
+TEST_CASE MUST_BE_ERROR object definition 3 missing value
+
+[x=1, y=, z=3]
+
+TEST_CASE MUST_BE_ERROR object definition 4 missing key
+
+[x=1, =12, z=3]
+
+TEST_CASE MUST_BE_ERROR object definition 5 missing member
+
+[x=1,, z=3]
+
+TEST_CASE object definition 6
+
+[
+x=1, 
+y=2, z=3
+]
+
+TEST_CASE object definition 7 single element
+
+[x=1]
+
+TEST_CASE MUST_BE_ERROR object definition 8 operator rules apply to the equals sign
+
+[x
+=1
+]
+
+TEST_CASE empty object definition
+
+[=]
+
+TEST_CASE function assignment in objects 1
+
+[x = 12,
+f :: 13,
+y = 14
+]
+
+TEST_CASE function assignment in objects 2
+
+[x = 12,
+f :(a) 13 + a,
+y = 14
+]
+
+TEST_CASE function assignment in objects 3
+
+[x = 12,
+f :: 13
+,
+g :() 14
+]
+
+TEST_CASE ignore the underscore variable
+
+_ = 7
+
+true
+
+TEST_CASE MUST_BE_ERROR the underscore variable can only be an l-value
+
+a = _

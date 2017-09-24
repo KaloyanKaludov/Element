@@ -43,7 +43,6 @@
     <File Name="../../source/Lexer.h"/>
     <File Name="../../source/Logger.cpp"/>
     <File Name="../../source/Logger.h"/>
-    <File Name="../../source/main.cpp"/>
     <File Name="../../source/Native.cpp"/>
     <File Name="../../source/Native.h"/>
     <File Name="../../source/OpCodes.h"/>
@@ -64,18 +63,31 @@
     <File Name="../../source/MemoryManager.h"/>
     <File Name="../../source/GarbageCollected.cpp"/>
     <File Name="../../source/GarbageCollected.h"/>
+    <File Name="../../source/main.cpp"/>
   </VirtualDirectory>
   <VirtualDirectory Name="examples">
     <File Name="../../examples/basic-types.element"/>
     <File Name="../../examples/closures.element"/>
     <File Name="../../examples/flow-control.element"/>
     <File Name="../../examples/functions.element"/>
-    <File Name="../../examples/generators.element"/>
     <File Name="../../examples/objects.element"/>
     <File Name="../../examples/gc-tests.element"/>
     <File Name="../../examples/test.element"/>
     <File Name="../../examples/coroutines.element"/>
     <File Name="../../examples/arrays.element"/>
+    <File Name="../../examples/iterators.element"/>
+  </VirtualDirectory>
+  <VirtualDirectory Name="tests">
+    <File Name="../../tests/0-syntax.element"/>
+    <File Name="../../tests/5-objects.element"/>
+    <File Name="../../tests/8-iteration.element"/>
+    <File Name="../../tests/9-standard-native-functions.element"/>
+    <File Name="../../tests/1-basic-types.element"/>
+    <File Name="../../tests/2-flow-control.element"/>
+    <File Name="../../tests/3-functions.element"/>
+    <File Name="../../tests/4-arrays.element"/>
+    <File Name="../../tests/6-closures.element"/>
+    <File Name="../../tests/7-coroutines.element"/>
   </VirtualDirectory>
   <Settings Type="Executable">
     <GlobalSettings>
@@ -93,7 +105,7 @@
       </Compiler>
       <Linker Options="" Required="yes"/>
       <ResourceCompiler Options="" Required="no"/>
-      <General OutputFile="../../bin/element_d" IntermediateDirectory="./Debug" Command="element_d" CommandArguments="-dac ../examples/test.element" UseSeparateDebugArgs="no" DebugArguments="" WorkingDirectory="../../bin" PauseExecWhenProcTerminates="yes" IsGUIProgram="no" IsEnabled="yes"/>
+      <General OutputFile="../../bin/element_d" IntermediateDirectory="./Debug" Command="element_d" CommandArguments="" UseSeparateDebugArgs="no" DebugArguments="" WorkingDirectory="../../bin" PauseExecWhenProcTerminates="yes" IsGUIProgram="no" IsEnabled="yes"/>
       <BuildSystem Name="Default"/>
       <Environment EnvVarSetName="&lt;Use Defaults&gt;" DbgSetName="&lt;Use Defaults&gt;">
         <![CDATA[]]>

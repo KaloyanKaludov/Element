@@ -55,9 +55,9 @@ struct ExecutionContext
 		CRS_Finished	= 2,
 	};
 
-	State					state		= CRS_NotStarted;
-	ExecutionContext*		parent		= nullptr;
-	Object*					lastObject	= nullptr;
+	State					state	= CRS_NotStarted;
+	ExecutionContext*		parent	= nullptr;
+	Value					lastObject;
 	std::deque<StackFrame>	stackFrames; // this needs to be a deque, because things keep references to it
 	std::vector<Value>		stack;
 };

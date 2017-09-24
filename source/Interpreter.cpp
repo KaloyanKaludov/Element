@@ -17,37 +17,7 @@ Interpreter::Interpreter()
 , mDebugPrintSymbols(false)
 , mDebugPrintConstants(false)
 {
-	RegisterNativeFunction("type",				nativefunctions::Type);
-	RegisterNativeFunction("this_call",			nativefunctions::ThisCall);
-	RegisterNativeFunction("garbage_collect",	nativefunctions::GarbageCollect);
-	RegisterNativeFunction("memory_stats",		nativefunctions::MemoryStats);
-	RegisterNativeFunction("print",				nativefunctions::Print);
-	RegisterNativeFunction("to_upper",			nativefunctions::ToUpper);
-	RegisterNativeFunction("to_lower",			nativefunctions::ToLower);
-	RegisterNativeFunction("make_error",		nativefunctions::MakeError);
-	RegisterNativeFunction("is_error",			nativefunctions::IsError);
-	RegisterNativeFunction("make_coroutine",	nativefunctions::MakeCoroutine);
-	RegisterNativeFunction("make_generator",	nativefunctions::MakeGenerator);
-	RegisterNativeFunction("range",				nativefunctions::Range);
-	RegisterNativeFunction("each",				nativefunctions::Each);
-	RegisterNativeFunction("times",				nativefunctions::Times);
-	RegisterNativeFunction("count",				nativefunctions::Count);
-	RegisterNativeFunction("map",				nativefunctions::Map);
-	RegisterNativeFunction("filter",			nativefunctions::Filter);
-	RegisterNativeFunction("reduce",			nativefunctions::Reduce);
-	RegisterNativeFunction("all",				nativefunctions::All);
-	RegisterNativeFunction("any",				nativefunctions::Any);
-	RegisterNativeFunction("min",				nativefunctions::Min);
-	RegisterNativeFunction("max",				nativefunctions::Max);
-	RegisterNativeFunction("sort",				nativefunctions::Sort);
-	RegisterNativeFunction("abs",				nativefunctions::Abs);
-	RegisterNativeFunction("floor",				nativefunctions::Floor);
-	RegisterNativeFunction("ceil",				nativefunctions::Ceil);
-	RegisterNativeFunction("round",				nativefunctions::Round);
-	RegisterNativeFunction("sqrt",				nativefunctions::Sqrt);
-	RegisterNativeFunction("sin",				nativefunctions::Sin);
-	RegisterNativeFunction("cos",				nativefunctions::Cos);
-	RegisterNativeFunction("tan",				nativefunctions::Tan);
+	RegisterStandardNativeFunctions();
 }
 
 Value Interpreter::Interpret(std::istream& input)
@@ -79,7 +49,7 @@ Value Interpreter::Interpret(std::istream& input)
 
 	if( mLogger.HasErrorMessages() )
 	{
-		mLogger.PrintErrorMessages();
+		result = mVirtualMachine.GetMemoryManager().NewError( mLogger.GetCombinedErrorMessages() );
 		mLogger.ClearErrorMessages();
 	}
 
@@ -94,13 +64,30 @@ Value Interpreter::Interpret(const char* bytecode)
 
 	if( mLogger.HasErrorMessages() )
 	{
-		mLogger.PrintErrorMessages();
+		result = mVirtualMachine.GetMemoryManager().NewError( mLogger.GetCombinedErrorMessages() );
 		mLogger.ClearErrorMessages();
 	}
 
 	mVirtualMachine.ClearError();
 
 	return result;
+}
+
+void Interpreter::ResetState()
+{
+	mLogger.ClearErrorMessages();
+	
+	mSemanticAnalyzer.ResetState();
+
+	mCompiler.ResetState();
+
+	mVirtualMachine.ResetState();
+	
+	mDebugPrintAst			= false;
+	mDebugPrintSymbols		= false;
+	mDebugPrintConstants	= false;
+
+	RegisterStandardNativeFunctions();
 }
 
 void Interpreter::SetDebugPrintAst(bool state)
@@ -120,7 +107,7 @@ void Interpreter::SetDebugPrintConstants(bool state)
 
 std::string Interpreter::GetVersion() const
 {
-	return "element interpreter version 0.0.3";
+	return "element interpreter version 0.0.4";
 }
 
 void Interpreter::GarbageCollect()
@@ -132,6 +119,44 @@ void Interpreter::RegisterNativeFunction(const std::string& name, Value::NativeF
 {
 	int index = mVirtualMachine.AddNativeFunction(function);
 	mSemanticAnalyzer.AddNativeFunction(name, index);
+}
+
+void Interpreter::RegisterStandardNativeFunctions()
+{
+	RegisterNativeFunction("type",				nativefunctions::Type);
+	RegisterNativeFunction("this_call",			nativefunctions::ThisCall);
+	RegisterNativeFunction("garbage_collect",	nativefunctions::GarbageCollect);
+	RegisterNativeFunction("memory_stats",		nativefunctions::MemoryStats);
+	RegisterNativeFunction("print",				nativefunctions::Print);
+	RegisterNativeFunction("to_upper",			nativefunctions::ToUpper);
+	RegisterNativeFunction("to_lower",			nativefunctions::ToLower);
+	RegisterNativeFunction("keys",				nativefunctions::Keys);
+	RegisterNativeFunction("make_error",		nativefunctions::MakeError);
+	RegisterNativeFunction("is_error",			nativefunctions::IsError);
+	RegisterNativeFunction("make_coroutine",	nativefunctions::MakeCoroutine);
+	RegisterNativeFunction("make_iterator",		nativefunctions::MakeIterator);
+	RegisterNativeFunction("iterator_has_next",	nativefunctions::IteratorHasNext);
+	RegisterNativeFunction("iterator_get_next",	nativefunctions::IteratorGetNext);
+	RegisterNativeFunction("range",				nativefunctions::Range);
+	RegisterNativeFunction("each",				nativefunctions::Each);
+	RegisterNativeFunction("times",				nativefunctions::Times);
+	RegisterNativeFunction("count",				nativefunctions::Count);
+	RegisterNativeFunction("map",				nativefunctions::Map);
+	RegisterNativeFunction("filter",			nativefunctions::Filter);
+	RegisterNativeFunction("reduce",			nativefunctions::Reduce);
+	RegisterNativeFunction("all",				nativefunctions::All);
+	RegisterNativeFunction("any",				nativefunctions::Any);
+	RegisterNativeFunction("min",				nativefunctions::Min);
+	RegisterNativeFunction("max",				nativefunctions::Max);
+	RegisterNativeFunction("sort",				nativefunctions::Sort);
+	RegisterNativeFunction("abs",				nativefunctions::Abs);
+	RegisterNativeFunction("floor",				nativefunctions::Floor);
+	RegisterNativeFunction("ceil",				nativefunctions::Ceil);
+	RegisterNativeFunction("round",				nativefunctions::Round);
+	RegisterNativeFunction("sqrt",				nativefunctions::Sqrt);
+	RegisterNativeFunction("sin",				nativefunctions::Sin);
+	RegisterNativeFunction("cos",				nativefunctions::Cos);
+	RegisterNativeFunction("tan",				nativefunctions::Tan);
 }
 
 }

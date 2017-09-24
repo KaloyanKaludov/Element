@@ -1,0 +1,164 @@
+TEST_CASE array definition and access
+a = [0, 1, 2, 3, 4, 5]
+
+a[2] == 2
+
+TEST_CASE array assignment
+
+a = [0, 1, 2, 3, 4, 5]
+
+a[0] = a[1] + a[2]
+
+a[0] == 3
+
+TEST_CASE getting the size of an array
+
+a = [0, 1, 2, 3, 4]
+
+#a == 5
+
+TEST_CASE negative numbers as indices get the elements from the back of the array
+
+a = [0, 1, 2, 3, 4]
+
+a[-1] == 4 and
+a[-3] == 2
+
+TEST_CASE MUST_BE_ERROR array out of bounds 1
+
+a = [0, 1, 2, 3, 4]
+
+a[5]
+
+TEST_CASE MUST_BE_ERROR array out of bounds 2
+
+a = [0, 1, 2, 3, 4]
+
+a[-8]
+
+TEST_CASE MUST_BE_ERROR array out of bounds 3
+
+a = [0, 1, 2, 3, 4]
+
+a[6] = 7
+
+TEST_CASE MUST_BE_ERROR array out of bounds 4
+
+a = [0, 1, 2, 3, 4]
+
+a[-9] = 3
+
+TEST_CASE appending to the end of an array
+
+a = [0, 1, 2]
+
+a << 6
+
+#a == 4 and
+a[3] == 6
+
+TEST_CASE removing an element from the end of an array
+
+a = [0, 1, 2]
+
+a >> v
+
+#a == 2 and
+v == 2
+
+TEST_CASE removing an element from an empty array results in an error
+
+a = []
+
+a >> v
+
+v -> type() == "error"
+
+TEST_CASE array concatenation
+
+a = ["foo", "bar"]
+a += ["some", "strings"]
+
+#a == 4 and
+a[2] == "some"
+
+TEST_CASE arrays are heterogeneous
+
+a = [true, false, "str", 3.14]
+
+type(a[0]) == "bool" and
+type(a[2]) == "string" and
+type(a[3]) == "float"
+
+TEST_CASE unpacking arrays
+
+[m, n] = ["foo", "bar"]
+
+m == "foo" and
+n == "bar"
+
+TEST_CASE unpack from a single value
+
+[a, b, c] = 5
+
+a == 5 and
+b == nil and
+c == nil
+
+TEST_CASE unpack more than an array contains
+
+[a, b, c] = [1, 2]
+
+a == 1 and
+b == 2 and
+c == nil
+
+TEST_CASE unpack less than an array contains
+
+[a, b] = [1, 2, 3]
+
+a == 1 and
+b == 2
+
+TEST_CASE unpack into nothing
+
+[] = [true, false, true]
+
+true
+
+TEST_CASE swapping values using array unpacking
+
+m = 17
+n = 23
+
+[m, n] = [n, m]
+
+m == 23 and
+n == 17
+
+TEST_CASE ignoring unpacked values using underscore
+
+b = ["foo", "bar", "baz"]
+[_, _, p] = b
+
+p == "baz"
+
+TEST_CASE an array referencing itself 1
+
+a = [0, 1, 2]
+
+a << a
+
+a[0] == 0 and
+a[3][0] == 0
+
+TEST_CASE an array referencing itself 2
+
+a = [0, 1, 2]
+
+a << a
+
+a[1] = 9
+
+a[1] == 9 and
+a[3][1] == 9

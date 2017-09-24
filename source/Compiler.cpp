@@ -25,20 +25,25 @@ std::unique_ptr<char[]> Compiler::Compile(const ast::FunctionNode* node)
 
 void Compiler::ResetState()
 {
+	mConstants.clear();
+	mConstants.emplace_back();		// nil
+	mConstants.emplace_back(true);	// true
+	mConstants.emplace_back(false);	// false
+	
 	mConstantsTotalOffset = 0;
 
 	mLoopContexts.clear();
 	mFunctionContexts.clear();
-
-	mConstants.emplace_back();		// nil
-	mConstants.emplace_back(true);	// true
-	mConstants.emplace_back(false);	// false
-
-	mSymbols.clear();
-	mSymbols.emplace_back("proto", Symbol::ProtoHash);
+	
+	mCurrentFunction = nullptr;
 
 	mSymbolIndices.clear();
 	mSymbolIndices[Symbol::ProtoHash] = 0;
+
+	mSymbols.clear();
+	mSymbols.emplace_back("proto", Symbol::ProtoHash);
+	
+	mSymbolsOffset = 0;
 }
 
 void Compiler::DebugPrintBytecode(const char* bytecode, bool printSymbols, bool printConstants) const
@@ -251,12 +256,12 @@ void Compiler::DebugPrintBytecode(const char* bytecode, bool printSymbols, bool 
 				case OpCode::OC_PopStoreMember:
 					printf("PopStoreMember\n"); break;
 
-				case OpCode::OC_MakeGenerator:
-					printf("MakeGenerator\n"); break;
-				case OpCode::OC_GeneratorHasValue:
-					printf("GeneratorHasValue\n"); break;
-				case OpCode::OC_GeneratorNextValue:
-					printf("GeneratorNextValue\n"); break;
+				case OpCode::OC_MakeIterator:
+					printf("MakeIterator\n"); break;
+				case OpCode::OC_IteratorHasNext:
+					printf("IteratorHasNext\n"); break;
+				case OpCode::OC_IteratorGetNext:
+					printf("IteratorGetNext\n"); break;
 
 				case OpCode::OC_MakeBox:
 					printf("MakeBox           %d\n", instruction->A); break;
@@ -566,7 +571,8 @@ void Compiler::BuildVariableLoad(const ast::Node* node, bool keepValue)
 	}
 	else if( n->variableType == ast::VariableNode::V_Underscore )
 	{
-		mCurrentFunction->instructions.emplace_back( OpCode::OC_LoadConstant, 0 ); // nil
+		mLogger.PushError(n->coords, "Cannot load from the underscore variable\n");
+		return;
 	}
 	else // load anonymous argument $ $1 $2 ...
 	{
@@ -725,6 +731,14 @@ void Compiler::BuildBooleanOp(const ast::Node* node, bool keepValue)
 		mCurrentFunction->instructions.emplace_back( OpCode::OC_JumpIfTrueOrPop );
 
 	EmitInstructions(n->rhs, true);
+	
+	// TODO: right now if we short-circuit an expression like 'a and b and c' at 'a'
+	// then the jump will take us to another jump at 'b' which will execute right away
+	// because there will be a 'false' on the stack from the 'a' evaluation and then
+	// one more for 'c'. If 'and' and 'or' have right-to-left associativity then the
+	// 'n->rhs' will contain all the stuff we need to jump over and we will have only
+	// one jump. This will not work if someone explicitly defines '(a and b) and c'
+	// but usually people don't do that. In Python both cases generate only one jump.
 
 	unsigned jumpTarget = mCurrentFunction->instructions.size();
 	mCurrentFunction->instructions[jumpIndex].A = jumpTarget;
@@ -736,6 +750,12 @@ void Compiler::BuildBooleanOp(const ast::Node* node, bool keepValue)
 void Compiler::BuildArrowOp(const ast::Node* node, bool keepValue)
 {
 	const ast::BinaryOperatorNode* n = (const ast::BinaryOperatorNode*)node;
+
+	if( n->rhs->type != ast::Node::N_FunctionCall )
+	{
+		mLogger.PushError(n->rhs->coords, "The -> operator must have a function call on the right-hand side");
+		return;
+	}
 
 	// emit the first argument
 	EmitInstructions(n->lhs, true);
@@ -1009,10 +1029,10 @@ void Compiler::BuildFor(const ast::Node* node, bool keepValue)
 	// should we need to call 'return' from inside the loop, we will need to clean up
 	mFunctionContexts.back().forLoopsGarbage += keepValue ? 2 : 1;
 
-	// confirm we have a generator object or make a default one for arrays and strings
-	mCurrentFunction->instructions.emplace_back( OpCode::OC_MakeGenerator );
+	// confirm we have an iterator object or make a default one for arrays and strings
+	mCurrentFunction->instructions.emplace_back( OpCode::OC_MakeIterator );
 
-	if( keepValue ) // the default result is nil, it will be kept beneath the generator
+	if( keepValue ) // the default result is nil, it will be kept beneath the iterator
 	{
 		mCurrentFunction->instructions.emplace_back( OpCode::OC_LoadConstant, 0 );
 		mCurrentFunction->instructions.emplace_back( OpCode::OC_Rotate2 );
@@ -1020,23 +1040,23 @@ void Compiler::BuildFor(const ast::Node* node, bool keepValue)
 
 	unsigned conditionLocation = mCurrentFunction->instructions.size();
 
-	// 'has_value' will provide the condition
-	mCurrentFunction->instructions.emplace_back( OpCode::OC_GeneratorHasValue );
+	// 'has_next' will provide the condition
+	mCurrentFunction->instructions.emplace_back( OpCode::OC_IteratorHasNext );
 
 	// if the condition fails jump to 'end'
 	mLoopContexts.back().jumpToEndIndices.push_back( mCurrentFunction->instructions.size() );
 	mCurrentFunction->instructions.emplace_back( OpCode::OC_PopJumpIfFalse );
 
-	// 'next_value' will provide the new iterator variable
-	mCurrentFunction->instructions.emplace_back( OpCode::OC_GeneratorNextValue );
+	// 'get_next' will provide the new iterating variable
+	mCurrentFunction->instructions.emplace_back( OpCode::OC_IteratorGetNext );
 
-	// assign it to the iterator variable
-	BuildVariableStore(n->iterator, false);
+	// assign it to the iterating variable
+	BuildVariableStore(n->iteratingVariable, false);
 
 	// emit the body
 	EmitInstructions(n->body, keepValue);
 
-	if( keepValue ) // save the result value beneath the generator object which will be at TOS1
+	if( keepValue ) // save the result value beneath the iterator object which will be at TOS1
 		mCurrentFunction->instructions.emplace_back( OpCode::OC_MoveToTOS2 );
 
 	// jump back to the condition to try it again
@@ -1045,7 +1065,7 @@ void Compiler::BuildFor(const ast::Node* node, bool keepValue)
 
 	unsigned endLocation = mCurrentFunction->instructions.size();
 
-	// pop the generator object
+	// pop the iterator object
 	mCurrentFunction->instructions.emplace_back( OpCode::OC_Pop );
 
 	// fill placeholder jumps with proper locations
@@ -1092,7 +1112,7 @@ void Compiler::BuildFunction(const ast::Node* node, bool keepValue)
 
 	// new function goes in a new constant
 	int thisFunctionIndex = int(mConstants.size());
-
+	
 	mFunctionContexts.emplace_back();
 	mFunctionContexts.back().index = thisFunctionIndex;
 

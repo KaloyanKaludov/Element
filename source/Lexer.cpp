@@ -14,7 +14,7 @@ bool IsSpace(char c)
 
 bool IsNewLine(char c)
 {
-	return c == '\n' || c == '\r'; // carriage return???
+	return c == '\n' || c == '\r';
 }
 
 bool IsDigit(char c)
@@ -31,41 +31,22 @@ bool IsAlpha(char c)
 Lexer::Lexer(Logger& logger)
 : mInput(nullptr)
 , mLogger(logger)
-, C(' ')
-, mCurrentToken(T_InvalidToken)
-, mCurrentColumn(1)
-, mLastIdentifier("")
-, mLastString("")
-, mLastInteger(0)
-, mLastArgumentIndex(0)
-, mLastFloat(0.0f)
-, mLastBool(false)
-
-, mShouldStartOverAgain(false)
 {
+	Reset();
 }
 
 Lexer::Lexer(std::istream& input, Logger& logger)
 : mInput(&input)
 , mLogger(logger)
-, C(' ')
-, mCurrentToken(T_InvalidToken)
-, mCurrentColumn(1)
-, mLastIdentifier("")
-, mLastString("")
-, mLastInteger(0)
-, mLastArgumentIndex(0)
-, mLastFloat(0.0f)
-, mLastBool(false)
-
-, mShouldStartOverAgain(false)
 {
+	Reset();
 }
 
 void Lexer::SetInputStream(std::istream& input)
 {
 	mInput = &input;
-	C = ' ';
+	
+	Reset();
 }
 
 Token Lexer::GetNextToken()
@@ -379,6 +360,22 @@ void Lexer::DebugPrintToken(Token token) const
 		case T_InvalidToken:		printf("InvalidToken "); break;
 		default:					printf("Not a token!\n");
 	}
+}
+
+void Lexer::Reset()
+{
+	C = ' ';
+	
+	mCurrentToken		= T_InvalidToken;
+	mCurrentColumn		= 1;
+	mLastIdentifier		= "";
+	mLastString			= "";
+	mLastInteger		= 0;
+	mLastArgumentIndex	= 0;
+	mLastFloat			= 0.0f;
+	mLastBool			= false;
+	
+	mShouldStartOverAgain = false;
 }
 
 char Lexer::GetNextChar()

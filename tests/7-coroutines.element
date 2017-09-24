@@ -1,0 +1,112 @@
+TEST_CASE MUST_BE_ERROR coroutine yield without context
+
+f :: yield 1
+
+f()
+
+TEST_CASE basic coroutine yield
+
+f ::
+{
+    yield 1
+    yield 2
+    return 4
+}
+
+c = make_coroutine(f)
+
+c() == 1 and
+c() == 2 and
+c() == 4 and
+c() -> type() == "error"
+
+TEST_CASE feed values to a coroutine
+
+f:(a)
+{
+    b = yield
+	c = yield
+    return [a, b, c]
+}
+
+cr = make_coroutine(f)
+
+    cr("a")
+    cr("b")
+v = cr("c")
+
+v[0] == "a" and
+v[1] == "b" and
+v[2] == "c"
+
+TEST_CASE coroutine without yield
+
+f :: return 8
+
+cr = make_coroutine(f)
+
+cr() == 8 and
+cr() -> type() == "error"
+
+TEST_CASE yield from deeper in the call stack
+
+a ::
+{
+	yield 0
+	b()
+}
+
+b ::
+{
+	yield 1
+	c()
+}
+
+c ::
+{
+	yield 2
+}
+
+cr = make_coroutine(a)
+
+cr() == 0 and
+cr() == 1 and
+cr() == 2
+
+TEST_CASE two instances of the same coroutine progress independently
+
+f ::
+{
+	yield "a"
+	yield "b"
+	return "c"
+}
+
+cr0 = make_coroutine(f)
+cr1 = make_coroutine(f)
+
+cr1() == "a" and
+cr1() == "b" and
+cr0() == "a" and
+cr1() == "c" and
+cr0() == "b" and
+cr1() -> type() == "error" and
+cr0() == "c" and
+cr0() -> type() == "error"
+
+TEST_CASE dead coroutine remains dead
+
+f ::
+{
+	yield 1
+	return 1
+}
+
+cr = make_coroutine(f)
+
+cr()
+cr()
+
+cr() -> type() == "error" and
+cr() -> type() == "error" and
+cr() -> type() == "error"

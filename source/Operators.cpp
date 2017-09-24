@@ -50,12 +50,13 @@ const OperatorInfo OperatorsTable[] =
 
 	{T_Power,					true,		false,				110},
 
-	{T_Not,						false,		false,				120},
-	{T_Subtract,				false,		false,				120},
-	{T_Concatenate,				false,		false,				120},
-	{T_SizeOf,					false,		false,				120},
+	{T_Arrow,					true,		false,				115},
 
-	{T_Arrow,					true,		false,				130},
+	{T_Not,						false,		true,				120},
+	{T_Add,						false,		true,				120},
+	{T_Subtract,				false,		true,				120},
+	{T_Concatenate,				false,		true,				120},
+	{T_SizeOf,					false,		true,				120},
 
 	{T_LeftBracket,				false,		false,				150}, // indexing operator
 	{T_LeftParent,				false,		false,				150}, // function call

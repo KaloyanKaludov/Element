@@ -13,7 +13,7 @@ namespace element
 namespace nativefunctions
 {
 
-Value Type(VirtualMachine& vm, std::vector<Value>& args)
+Value Type(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -49,8 +49,8 @@ Value Type(VirtualMachine& vm, std::vector<Value>& args)
 	case Value::VT_Function:
 		result.string->str = "function";
 		break;
-	case Value::VT_NativeGenerator:
-		result.string->str = "native-generator";
+	case Value::VT_Iterator:
+		result.string->str = "iterator";
 		break;
 	case Value::VT_NativeFunction:
 		result.string->str = "native-function";
@@ -65,7 +65,7 @@ Value Type(VirtualMachine& vm, std::vector<Value>& args)
 	return result;
 }
 
-Value ThisCall(VirtualMachine& vm, std::vector<Value>& args)
+Value ThisCall(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() < 2 )
 	{
@@ -73,7 +73,7 @@ Value ThisCall(VirtualMachine& vm, std::vector<Value>& args)
 		return Value();
 	}
 
-	Value& function = args[0];
+	const Value& function = args[0];
 
 	if( ! function.IsFunction() )
 	{
@@ -81,9 +81,9 @@ Value ThisCall(VirtualMachine& vm, std::vector<Value>& args)
 		return Value();
 	}
 
-	Value& thisObject = args[1];
+	const Value& object = args[1];
 
-	if( ! thisObject.IsObject() )
+	if( ! object.IsObject() )
 	{
 		vm.SetError("function 'this_call(function, this, args...)' takes an object as a second argument");
 		return Value();
@@ -92,12 +92,12 @@ Value ThisCall(VirtualMachine& vm, std::vector<Value>& args)
 	std::vector<Value> thisCallArgs(args.begin() + 2, args.end());
 
 	// TODO: This will create a new execution context. Do we really want that?
-	Value result = vm.CallMemberFunction(thisObject, function, thisCallArgs);
+	Value result = vm.CallMemberFunction(object, function, thisCallArgs);
 
 	return result;
 }
 
-Value GarbageCollect(VirtualMachine& vm, std::vector<Value>& args)
+Value GarbageCollect(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.empty() )
 	{
@@ -116,33 +116,35 @@ Value GarbageCollect(VirtualMachine& vm, std::vector<Value>& args)
 	return Value();
 }
 
-Value MemoryStats(VirtualMachine& vm, std::vector<Value>& args)
+Value MemoryStats(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
-	Value data = vm.GetMemoryManager().NewObject();
+	MemoryManager& memoryManager = vm.GetMemoryManager();
 
-	int strings		= int(vm.GetMemoryManager().GetHeapObjectsCount(Value::VT_String));
-	int arrays		= int(vm.GetMemoryManager().GetHeapObjectsCount(Value::VT_Array));
-	int objects		= int(vm.GetMemoryManager().GetHeapObjectsCount(Value::VT_Object));
-	int functions	= int(vm.GetMemoryManager().GetHeapObjectsCount(Value::VT_Function));
-	int boxes		= int(vm.GetMemoryManager().GetHeapObjectsCount(Value::VT_Box));
-	int generators	= int(vm.GetMemoryManager().GetHeapObjectsCount(Value::VT_NativeGenerator));
-	int errors		= int(vm.GetMemoryManager().GetHeapObjectsCount(Value::VT_Error));
+	int strings		= memoryManager.GetHeapObjectsCount(Value::VT_String);
+	int arrays		= memoryManager.GetHeapObjectsCount(Value::VT_Array);
+	int objects		= memoryManager.GetHeapObjectsCount(Value::VT_Object);
+	int functions	= memoryManager.GetHeapObjectsCount(Value::VT_Function);
+	int boxes		= memoryManager.GetHeapObjectsCount(Value::VT_Box);
+	int iterators	= memoryManager.GetHeapObjectsCount(Value::VT_Iterator);
+	int errors		= memoryManager.GetHeapObjectsCount(Value::VT_Error);
 
-	int total = strings + arrays + objects + functions + boxes + generators + errors;
+	int total = strings + arrays + objects + functions + boxes + iterators + errors;
 
-	vm.SetMember(data, vm.GetHashFromName("heap_strings_count"),	Value(strings));
-	vm.SetMember(data, vm.GetHashFromName("heap_arrays_count"),		Value(arrays));
-	vm.SetMember(data, vm.GetHashFromName("heap_objects_count"),	Value(objects));
-	vm.SetMember(data, vm.GetHashFromName("heap_functions_count"),	Value(functions));
-	vm.SetMember(data, vm.GetHashFromName("heap_boxes_count"),		Value(boxes));
-	vm.SetMember(data, vm.GetHashFromName("heap_generators_count"),	Value(generators));
-	vm.SetMember(data, vm.GetHashFromName("heap_errors_count"),		Value(errors));
-	vm.SetMember(data, vm.GetHashFromName("heap_total_count"),		Value(total));
+	Value data = memoryManager.NewObject();
+	
+	vm.SetMember(data, "heap_strings_count",	Value(strings));
+	vm.SetMember(data, "heap_arrays_count",		Value(arrays));
+	vm.SetMember(data, "heap_objects_count",	Value(objects));
+	vm.SetMember(data, "heap_functions_count",	Value(functions));
+	vm.SetMember(data, "heap_boxes_count",		Value(boxes));
+	vm.SetMember(data, "heap_iterators_count",	Value(iterators));
+	vm.SetMember(data, "heap_errors_count",		Value(errors));
+	vm.SetMember(data, "heap_total_count",		Value(total));
 
 	return data;
 }
 
-Value Print(VirtualMachine& vm, std::vector<Value>& args)
+Value Print(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	for( const Value& arg : args )
 	{
@@ -170,7 +172,7 @@ Value Print(VirtualMachine& vm, std::vector<Value>& args)
 	return int(args.size());
 }
 
-Value ToUpper(VirtualMachine& vm, std::vector<Value>& args)
+Value ToUpper(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -195,7 +197,7 @@ Value ToUpper(VirtualMachine& vm, std::vector<Value>& args)
 	return vm.GetMemoryManager().NewString(str);
 }
 
-Value ToLower(VirtualMachine& vm, std::vector<Value>& args)
+Value ToLower(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -220,7 +222,39 @@ Value ToLower(VirtualMachine& vm, std::vector<Value>& args)
 	return vm.GetMemoryManager().NewString(str);
 }
 
-Value MakeError(VirtualMachine& vm, std::vector<Value>& args)
+Value Keys(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
+{
+	if( args.size() != 1 )
+	{
+		vm.SetError("function 'keys(object)' takes exactly one argument");
+		return Value();
+	}
+
+	if( ! args[0].IsObject() )
+	{
+		vm.SetError("function 'keys(object)' takes an object as argument");
+		return Value();
+	}
+	
+	MemoryManager& memoryManager = vm.GetMemoryManager();
+	
+	Object* object = args[0].object;
+	
+	Array* keys = memoryManager.NewArray();
+	std::string name;
+	
+	for( const Object::Member& member : object->members )
+	{
+		if( vm.GetNameFromHash(member.hash, &name) )
+			keys->elements.push_back( memoryManager.NewString(name) );
+		
+		name.clear();
+	}
+	
+	return keys;
+}
+
+Value MakeError(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -241,7 +275,7 @@ Value MakeError(VirtualMachine& vm, std::vector<Value>& args)
 	return vm.GetMemoryManager().NewError(str);
 }
 
-Value IsError(VirtualMachine& vm, std::vector<Value>& args)
+Value IsError(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -252,7 +286,7 @@ Value IsError(VirtualMachine& vm, std::vector<Value>& args)
 	return args[0].IsError();
 }
 
-Value MakeCoroutine(VirtualMachine& vm, std::vector<Value>& args)
+Value MakeCoroutine(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -271,56 +305,109 @@ Value MakeCoroutine(VirtualMachine& vm, std::vector<Value>& args)
 	return vm.GetMemoryManager().NewCoroutine( args[0].function );
 }
 
-Value MakeGenerator(VirtualMachine& vm, std::vector<Value>& args)
+Value MakeIterator(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
-		vm.SetError("function 'make_generator(value)' takes exactly one argument");
+		vm.SetError("function 'make_iterator(value)' takes exactly one argument");
 		return Value();
 	}
+	
+	Iterator* iterator = vm.MakeIteratorForValue( args[0] );
+	
+	if( iterator )
+		return iterator;
+	
+	if( args[0].type == Value::VT_Function && 
+		args[0].function->executionContext == nullptr )
+	{
+		vm.SetError("function 'make_iterator(value)': Cannot iterate a function. Only coroutine instances are iterable.");
+	}
+	else
+	{
+		vm.SetError("function 'make_iterator(value)': Value is not iterable.");
+	}
 
-	Value::Type type = args[0].type;
-
-	if( type == Value::VT_Array )
-		return vm.GetMemoryManager().NewGeneratorArray( args[0].array );
-	else if( type == Value::VT_String )
-		return vm.GetMemoryManager().NewGeneratorString( args[0].string );
-
-	vm.SetError("function 'make_generator(value)' takes only arrays and strings as arguments");
 	return Value();
 }
 
-struct RangeGenerator : public GeneratorImplementation
+Value IteratorHasNext(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
+{
+	if( args.size() != 1 )
+	{
+		vm.SetError("function 'iterator_has_next(iterator)' takes exactly one argument");
+		return Value();
+	}
+	
+	if( args[0].type != Value::VT_Iterator )
+	{
+		vm.SetError("function 'iterator_get_next(iterator)' takes an iterator as a first argument");
+		return Value();
+	}
+	
+	IteratorImplementation* ii = args[0].iterator->implementation;
+	
+	Value result = vm.CallMemberFunction(ii->thisObjectUsed, ii->hasNextFunction, {});
+	
+	if( vm.HasError() )
+		return Value();
+	
+	return result;
+}
+
+Value IteratorGetNext(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
+{
+	if( args.size() != 1 )
+	{
+		vm.SetError("function 'iterator_get_next(iterator)' takes exactly one argument");
+		return Value();
+	}
+	
+	if( args[0].type != Value::VT_Iterator )
+	{
+		vm.SetError("function 'iterator_get_next(iterator)' takes an iterator as a first argument");
+		return Value();
+	}
+	
+	IteratorImplementation* ii = args[0].iterator->implementation;
+	
+	Value result = vm.CallMemberFunction(ii->thisObjectUsed, ii->getNextFunction, {});
+	
+	if( vm.HasError() )
+		return Value();
+	
+	return result;
+}
+
+
+struct RangeIterator : public IteratorImplementation
 {
 	int	from = 0;
 	int	to = 0;
 	int step = 1;
-
-	virtual bool has_value() override;
-	virtual Value next_value() override;
-
-	virtual void UpdateGrayList(std::deque<GarbageCollected*>& grayList,
-								GarbageCollected::State currentWhite) override;
+	
+	RangeIterator()
+	{
+		hasNextFunction = Value([](VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args) -> Value
+		{
+			RangeIterator* self = static_cast<RangeIterator*>(thisObject.iterator->implementation);
+			
+			return self->from < self->to;
+		});
+		
+		getNextFunction = Value([](VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args) -> Value
+		{
+			RangeIterator* self = static_cast<RangeIterator*>(thisObject.iterator->implementation);
+			
+			int result = self->from;
+			self->from += self->step;
+			return result;
+		});
+	}
 };
 
-bool RangeGenerator::has_value()
-{
-	return from < to;
-}
 
-Value RangeGenerator::next_value()
-{
-	int result = from;
-	from += step;
-	return result;
-}
-
-void RangeGenerator::UpdateGrayList(std::deque<GarbageCollected*>& grayList,
-									GarbageCollected::State currentWhite)
-{
-}
-
-Value Range(VirtualMachine& vm, std::vector<Value>& args) // TODO check for reversed ranges like 'range(10, 0)'
+Value Range(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args) // TODO check for reversed ranges like 'range(10, 0)'
 {
 	if( args.size() == 1 )
 	{
@@ -330,11 +417,11 @@ Value Range(VirtualMachine& vm, std::vector<Value>& args) // TODO check for reve
 			return Value();
 		}
 
-		RangeGenerator* rangeGenerator = new RangeGenerator();
+		RangeIterator* rangeIterator = new RangeIterator();
 
-		rangeGenerator->to = args[0].AsInt();
+		rangeIterator->to = args[0].AsInt();
 
-		return vm.GetMemoryManager().NewGeneratorNative(rangeGenerator);
+		return vm.GetMemoryManager().NewIterator(rangeIterator);
 	}
 	else if( args.size() == 2 )
 	{
@@ -344,12 +431,12 @@ Value Range(VirtualMachine& vm, std::vector<Value>& args) // TODO check for reve
 			return Value();
 		}
 
-		RangeGenerator* rangeGenerator = new RangeGenerator();
+		RangeIterator* rangeIterator = new RangeIterator();
 
-		rangeGenerator->from = args[0].AsInt();
-		rangeGenerator->to = args[1].AsInt();
+		rangeIterator->from = args[0].AsInt();
+		rangeIterator->to = args[1].AsInt();
 
-		return vm.GetMemoryManager().NewGeneratorNative(rangeGenerator);
+		return vm.GetMemoryManager().NewIterator(rangeIterator);
 	}
 	else if( args.size() == 3 )
 	{
@@ -359,20 +446,20 @@ Value Range(VirtualMachine& vm, std::vector<Value>& args) // TODO check for reve
 			return Value();
 		}
 
-		RangeGenerator* rangeGenerator = new RangeGenerator();
+		RangeIterator* rangeIterator = new RangeIterator();
 
-		rangeGenerator->from = args[0].AsInt();
-		rangeGenerator->to = args[1].AsInt();
-		rangeGenerator->step = args[2].AsInt();
+		rangeIterator->from = args[0].AsInt();
+		rangeIterator->to = args[1].AsInt();
+		rangeIterator->step = args[2].AsInt();
 
-		return vm.GetMemoryManager().NewGeneratorNative(rangeGenerator);
+		return vm.GetMemoryManager().NewIterator(rangeIterator);
 	}
 
 	vm.SetError("'range' can only be 'range(max)', 'range(min,max)' or 'range(min,max,step)'");
 	return Value();
 }
 
-Value Each(VirtualMachine& vm, std::vector<Value>& args)
+Value Each(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 2 )
 	{
@@ -380,70 +467,38 @@ Value Each(VirtualMachine& vm, std::vector<Value>& args)
 		return Value();
 	}
 
-	Value& function = args[1];
+	const Value& function = args[1];
 
 	if( ! function.IsFunction() )
 	{
 		vm.SetError("function 'each(iterable, function)': second argument is not a function");
 		return Value();
 	}
-
-	if( args[0].IsArray() )
+	
+	if( Iterator* iterator = vm.MakeIteratorForValue( args[0] ) )
 	{
-		auto& array = args[0].array->elements;
-
-		int size = int(array.size());
-		for( int i = 0; i < size; ++i )
+		Value result;
+		std::vector<Value> noArgs;
+		Value& objectUsed	= iterator->implementation->thisObjectUsed;
+		Value& hasNext		= iterator->implementation->hasNextFunction;
+		Value& getNext		= iterator->implementation->getNextFunction;
+		
+		while( true )
 		{
-			vm.CallFunction(function, {array[i], i});
-
+			result = vm.CallMemberFunction(objectUsed, hasNext, noArgs);
+			
 			if( vm.HasError() )
 				return Value();
-		}
-	}
-	else if( args[0].IsNativeGenerator() )
-	{
-		Generator* generator = args[0].nativeGenerator;
-
-		while( generator->implementation->has_value() )
-		{
-			vm.CallFunction(function, {generator->implementation->next_value()});
-
+			
+			if( !result.AsBool() )
+				break;
+	
+			result = vm.CallMemberFunction(objectUsed, getNext, noArgs);
+			
 			if( vm.HasError() )
 				return Value();
-		}
-	}
-	else if( args[0].IsObject() )
-	{
-		Value& object = args[0];
-
-		Value has_value = vm.GetMember(object, Symbol::HasValueHash);
-
-		if( ! has_value.IsFunction() )
-		{
-			vm.SetError("function 'each(iterable, function)': iterable doesn't have 'has_value' function");
-			return Value();
-		}
-
-		Value next_value = vm.GetMember(object, Symbol::NextValueHash);
-
-		if( ! next_value.IsFunction() )
-		{
-			vm.SetError("function 'each(iterable, function)': iterable doesn't have 'next_value' function");
-			return Value();
-		}
-
-		while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
-		{
-			if( vm.HasError() )
-				return Value();
-
-			Value nextValue = vm.CallMemberFunction(object, next_value, {});
-
-			if( vm.HasError() )
-				return Value();
-
-			vm.CallFunction(function, {nextValue});
+				
+			vm.CallFunction(function, {result});
 
 			if( vm.HasError() )
 				return Value();
@@ -451,13 +506,13 @@ Value Each(VirtualMachine& vm, std::vector<Value>& args)
 	}
 	else
 	{
-		vm.SetError("function 'each(iterable, function)': iterable must be array, object or native-generator");
+		vm.SetError("function 'each(iterable, function)': first argument not interable");
 	}
-
+	
 	return Value();
 }
 
-Value Times(VirtualMachine& vm, std::vector<Value>& args)
+Value Times(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 2 )
 	{
@@ -472,7 +527,7 @@ Value Times(VirtualMachine& vm, std::vector<Value>& args)
 	}
 
 	int times = args[0].AsInt();
-	Value& function = args[1];
+	const Value& function = args[1];
 
 	if( ! function.IsFunction() )
 	{
@@ -491,125 +546,178 @@ Value Times(VirtualMachine& vm, std::vector<Value>& args)
 	return Value();
 }
 
-Value Count(VirtualMachine& vm, std::vector<Value>& args)
+Value Count(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 2 )
 	{
-		vm.SetError("function 'count(array, function)' takes exactly two arguments");
+		vm.SetError("function 'count(iterable, function)' takes exactly two arguments");
 		return Value();
 	}
 
-	if( ! args[0].IsArray() )
-	{
-		vm.SetError("function 'count(array, function)': first argument is not an array");
-		return Value();
-	}
-
-	Value& array = args[0];
-	Value& function = args[1];
+	const Value& function = args[1];
 
 	if( ! function.IsFunction() )
 	{
-		vm.SetError("function 'count(array, function)': second argument is not a function");
+		vm.SetError("function 'count(iterable, function)': second argument is not a function");
 		return Value();
 	}
 
-	int counter = 0;
-
-	for( const Value& element : array.array->elements )
+	if( Iterator* iterator = vm.MakeIteratorForValue( args[0] ) )
 	{
-		Value result = vm.CallFunction(function, {element});
+		Value result;
+		std::vector<Value> noArgs;
+		Value& objectUsed	= iterator->implementation->thisObjectUsed;
+		Value& hasNext		= iterator->implementation->hasNextFunction;
+		Value& getNext		= iterator->implementation->getNextFunction;
+		
+		int counter = 0;
+		
+		while( true )
+		{
+			result = vm.CallMemberFunction(objectUsed, hasNext, noArgs);
+			
+			if( vm.HasError() )
+				return Value();
+			
+			if( !result.AsBool() )
+				break;
+	
+			result = vm.CallMemberFunction(objectUsed, getNext, noArgs);
+			
+			if( vm.HasError() )
+				return Value();
+				
+			result = vm.CallFunction(function, {result});
 
-		if( vm.HasError() )
-			return Value();
+			if( vm.HasError() )
+				return Value();
 
-		if( result.AsBool() )
-			++counter;
+			if( result.AsBool() )
+				++counter;
+		}
+		
+		return counter;
 	}
-
-	return counter;
+	
+	vm.SetError("function 'count(iterable, function)': first argument not interable");
+	return Value();
 }
 
-Value Map(VirtualMachine& vm, std::vector<Value>& args)
+Value Map(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 2 )
 	{
-		vm.SetError("function 'map(array, function)' takes exactly two arguments");
+		vm.SetError("function 'map(iterable, function)' takes exactly two arguments");
 		return Value();
 	}
 
-	if( ! args[0].IsArray() )
-	{
-		vm.SetError("function 'map(array, function)': first argument is not an array");
-		return Value();
-	}
-
-	auto& array = args[0].array->elements;
-	Value& function = args[1];
+	const Value& function = args[1];
 
 	if( ! function.IsFunction() )
 	{
-		vm.SetError("function 'map(array, function)': second argument is not a function");
+		vm.SetError("function 'map(iterable, function)': second argument is not a function");
 		return Value();
 	}
-
-	Value result = vm.GetMemoryManager().NewArray();
-
-	result.array->elements.reserve(array.size());
-
-	int size = int(array.size());
-	for( int i = 0; i < size; ++i )
+	
+	if( Iterator* iterator = vm.MakeIteratorForValue( args[0] ) )
 	{
-		result.array->elements.push_back( vm.CallFunction(function, {array[i], i}) );
+		Value result;
+		std::vector<Value> noArgs;
+		Value& objectUsed	= iterator->implementation->thisObjectUsed;
+		Value& hasNext		= iterator->implementation->hasNextFunction;
+		Value& getNext		= iterator->implementation->getNextFunction;
+		
+		Value mapped = vm.GetMemoryManager().NewArray();
+		
+		while( true )
+		{
+			result = vm.CallMemberFunction(objectUsed, hasNext, noArgs);
+			
+			if( vm.HasError() )
+				return Value();
+			
+			if( !result.AsBool() )
+				break;
+	
+			result = vm.CallMemberFunction(objectUsed, getNext, noArgs);
+			
+			if( vm.HasError() )
+				return Value();
+				
+			result = vm.CallFunction(function, {result});
 
-		if( vm.HasError() )
-			return Value();
+			if( vm.HasError() )
+				return Value();
+			
+			mapped.array->elements.push_back(result);
+		}
+		
+		return mapped;
 	}
-
-	return result;
+	
+	vm.SetError("function 'map(iterable, function)': first argument not interable");
+	return Value();
 }
 
-Value Filter(VirtualMachine& vm, std::vector<Value>& args)
+Value Filter(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 2 )
 	{
-		vm.SetError("function 'filter(array, predicate)' takes exactly two arguments");
+		vm.SetError("function 'filter(iterable, predicate)' takes exactly two arguments");
 		return Value();
 	}
 
-	if( ! args[0].IsArray() )
-	{
-		vm.SetError("function 'filter(array, predicate)': first argument is not an array");
-		return Value();
-	}
-
-	auto& array = args[0].array->elements;
-	Value& function = args[1];
+	const Value& function = args[1];
 
 	if( ! function.IsFunction() )
 	{
-		vm.SetError("function 'filter(array, predicate)': second argument is not a function");
+		vm.SetError("function 'filter(iterable, predicate)': second argument is not a function");
 		return Value();
 	}
-
-	Value result = vm.GetMemoryManager().NewArray();
-
-	int size = int(array.size());
-	for( int i = 0; i < size; ++i )
+	
+	if( Iterator* iterator = vm.MakeIteratorForValue( args[0] ) )
 	{
-		bool include = vm.CallFunction(function, {array[i], i}).AsBool();
+		Value result;
+		Value item;
+		std::vector<Value> noArgs;
+		Value& objectUsed	= iterator->implementation->thisObjectUsed;
+		Value& hasNext		= iterator->implementation->hasNextFunction;
+		Value& getNext		= iterator->implementation->getNextFunction;
+		
+		Value filtered = vm.GetMemoryManager().NewArray();
+		
+		while( true )
+		{
+			result = vm.CallMemberFunction(objectUsed, hasNext, noArgs);
+			
+			if( vm.HasError() )
+				return Value();
+			
+			if( !result.AsBool() )
+				break;
+	
+			item = vm.CallMemberFunction(objectUsed, getNext, noArgs);
+			
+			if( vm.HasError() )
+				return Value();
+				
+			result = vm.CallFunction(function, {item});
 
-		if( vm.HasError() )
-			return Value();
-
-		if( include )
-			result.array->elements.push_back(array[i]);
+			if( vm.HasError() )
+				return Value();
+			
+			if( result.AsBool() )
+				filtered.array->elements.push_back(item);
+		}
+		
+		return filtered;
 	}
-
-	return result;
+	
+	vm.SetError("function 'filter(iterable, function)': first argument not interable");
+	return Value();
 }
 
-Value Reduce(VirtualMachine& vm, std::vector<Value>& args)
+Value Reduce(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 2 )
 	{
@@ -617,479 +725,246 @@ Value Reduce(VirtualMachine& vm, std::vector<Value>& args)
 		return Value();
 	}
 
-	Value& function = args[1];
+	const Value& function = args[1];
 
 	if( ! function.IsFunction() )
 	{
 		vm.SetError("function 'reduce(iterable, function)': second argument is not a function");
 		return Value();
 	}
-
-	Value result;
-
-	if( args[0].IsArray() )
+	
+	if( Iterator* iterator = vm.MakeIteratorForValue( args[0] ) )
 	{
-		auto& array = args[0].array->elements;
-
-		int size = int(array.size());
-
-		if( size > 0 )
+		Value result;
+		std::vector<Value> noArgs;
+		Value& objectUsed	= iterator->implementation->thisObjectUsed;
+		Value& hasNext		= iterator->implementation->hasNextFunction;
+		Value& getNext		= iterator->implementation->getNextFunction;
+		
+		Value reduced;
+		result = vm.CallMemberFunction(objectUsed, hasNext, noArgs);
+		
+		if( vm.HasError() )
+			return Value();
+		
+		if( result.AsBool() )
 		{
-			result = array[0];
-			for( int i = 1; i < size; ++i )
+			reduced = vm.CallMemberFunction(objectUsed, getNext, noArgs);
+			
+			while( true )
 			{
-				result = vm.CallFunction(function, {result, array[i]});
-
+				result = vm.CallMemberFunction(objectUsed, hasNext, noArgs);
+				
 				if( vm.HasError() )
 					return Value();
-			}
-		}
-	}
-	else if( args[0].IsNativeGenerator() )
-	{
-		Generator* generator = args[0].nativeGenerator;
-
-		if( generator->implementation->has_value() )
-			result = generator->implementation->next_value();
-
-		while( generator->implementation->has_value() )
-		{
-			result = vm.CallFunction(function, {result, generator->implementation->next_value()});
-
-			if( vm.HasError() )
-				return Value();
-		}
-	}
-	else if( args[0].IsObject() )
-	{
-		Value& object = args[0];
-
-		Value has_value = vm.GetMember(object, Symbol::HasValueHash);
-
-		if( ! has_value.IsFunction() )
-		{
-			vm.SetError("function 'reduce(iterable, function)': iterable doesn't have 'has_value' function");
-			return Value();
-		}
-
-		Value next_value = vm.GetMember(object, Symbol::NextValueHash);
-
-		if( ! next_value.IsFunction() )
-		{
-			vm.SetError("function 'reduce(iterable, function)': iterable doesn't have 'next_value' function");
-			return Value();
-		}
-
-		if( vm.CallMemberFunction(object, has_value, {}).AsBool() )
-		{
-			if( vm.HasError() )
-				return Value();
-
-			result = vm.CallMemberFunction(object, next_value, {});
-
-			if( vm.HasError() )
-				return Value();
-		}
-
-		while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
-		{
-			if( vm.HasError() )
-				return Value();
-
-			Value nextValue = vm.CallMemberFunction(object, next_value, {});
-
-			if( vm.HasError() )
-				return Value();
-
-			result = vm.CallFunction(function, {result, nextValue});
-
-			if( vm.HasError() )
-				return Value();
-		}
-	}
-	else
-	{
-		vm.SetError("function 'reduce(iterable, function)': iterable must be array, object or native-generator");
-	}
-
-	return result;
-}
-
-Value All(VirtualMachine& vm, std::vector<Value>& args)
-{
-	unsigned argsSize = args.size();
-
-	if( argsSize < 1 )
-	{
-		vm.SetError("function 'all' takes one or two arguments");
-		return Value();
-	}
-
-	if( args[0].IsArray() )
-	{
-		auto& array = args[0].array->elements;
-
-		if( argsSize == 1 )
-		{
-			for( const Value& element : array )
-				if( !element.AsBool() )
-					return false;
-
-			return true;
-		}
-		else if( argsSize == 2 )
-		{
-			Value result;
-			Value& function = args[1];
-
-			if( !function.IsFunction() )
-			{
-				vm.SetError("function 'all(iterable, function)': second argument is not a function");
-				return Value();
-			}
-
-			for( const Value& element : array )
-			{
-				result = vm.CallFunction(function, {element});
-
-				if( vm.HasError() )
-				return Value();
-
+				
 				if( !result.AsBool() )
-					return false;
-			}
+					break;
+		
+				result = vm.CallMemberFunction(objectUsed, getNext, noArgs);
+				
+				if( vm.HasError() )
+					return Value();
+				
+				reduced = vm.CallFunction(function, {reduced, result});
 
-			return true;
+				if( vm.HasError() )
+					return Value();
+			}
 		}
-		else
-		{
-			vm.SetError("function 'all' takes one or two arguments");
-			return Value();
-		}
+		
+		return reduced;
 	}
-	else if( args[0].IsNativeGenerator() )
-	{
-		Generator* generator = args[0].nativeGenerator;
-
-		if( argsSize == 1 )
-		{
-			while( generator->implementation->has_value() )
-				if( !generator->implementation->next_value().AsBool() )
-					return false;
-
-			return true;
-		}
-		else if( argsSize == 2 )
-		{
-			Value result;
-			Value& function = args[1];
-
-			if( !function.IsFunction() )
-			{
-				vm.SetError("function 'all(iterable, function)': second argument is not a function");
-				return Value();
-			}
-
-			while( generator->implementation->has_value() )
-			{
-				result = vm.CallFunction(function, {generator->implementation->next_value()});
-
-				if( vm.HasError() )
-					return Value();
-
-				if( !result.AsBool() )
-					return false;
-			}
-
-			return true;
-		}
-		else
-		{
-			vm.SetError("function 'all' takes one or two arguments");
-			return Value();
-		}
-	}
-	else if( args[0].IsObject() )
-	{
-		Value& object = args[0];
-
-		Value has_value = vm.GetMember(object, Symbol::HasValueHash);
-
-		if( !has_value.IsFunction() )
-		{
-			vm.SetError("function 'all(iterable)': iterable doesn't have 'has_value' function");
-			return Value();
-		}
-
-		Value next_value = vm.GetMember(object, Symbol::NextValueHash);
-
-		if( !next_value.IsFunction() )
-		{
-			vm.SetError("function 'all(iterable)': iterable doesn't have 'next_value' function");
-			return Value();
-		}
-
-		if( argsSize == 1 )
-		{
-			while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
-			{
-				if( vm.HasError() )
-					return Value();
-
-				Value nextValue = vm.CallMemberFunction(object, next_value, {});
-
-				if( vm.HasError() )
-					return Value();
-
-				if( !nextValue.AsBool() )
-					return false;
-			}
-
-			return true;
-		}
-		else if( argsSize == 2 )
-		{
-			Value& function = args[1];
-
-			if( !function.IsFunction() )
-			{
-				vm.SetError("function 'all(iterable, function)': second argument is not a function");
-				return Value();
-			}
-
-			while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
-			{
-				if( vm.HasError() )
-					return Value();
-
-				Value nextValue = vm.CallMemberFunction(object, next_value, {});
-
-				if( vm.HasError() )
-					return Value();
-
-				Value result = vm.CallFunction(function, {nextValue});
-
-				if( vm.HasError() )
-					return Value();
-
-				if( !result.AsBool() )
-					return false;
-			}
-
-			return true;
-		}
-		else
-		{
-			vm.SetError("function 'all' takes one or two arguments");
-			return Value();
-		}
-	}
-	else
-	{
-		vm.SetError("function 'all(iterable)': iterable must be array, object or native-generator");
-		return Value();
-	}
-
+	
+	vm.SetError("function 'reduce(iterable, function)': first argument not interable");
 	return Value();
 }
 
-Value Any(VirtualMachine& vm, std::vector<Value>& args)
+Value All(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	unsigned argsSize = args.size();
 
-	if( argsSize < 1 )
+	if( argsSize < 1 || argsSize > 2 )
 	{
-		vm.SetError("function 'any' takes one or two arguments");
+		vm.SetError("function 'all(iterable, [predicate])' takes one or two arguments");
 		return Value();
 	}
 
-	if( args[0].IsArray() )
+	if( Iterator* iterator = vm.MakeIteratorForValue( args[0] ) )
 	{
-		auto& array = args[0].array->elements;
-
+		Value result;
+		std::vector<Value> noArgs;
+		Value& objectUsed	= iterator->implementation->thisObjectUsed;
+		Value& hasNext		= iterator->implementation->hasNextFunction;
+		Value& getNext		= iterator->implementation->getNextFunction;
+		
 		if( argsSize == 1 )
 		{
-			for( const Value& element : array )
-				if( element.AsBool() )
-					return true;
-
-			return false;
-		}
-		else if( argsSize == 2 )
-		{
-			Value result;
-			Value& function = args[1];
-
-			if( !function.IsFunction() )
+			while( true )
 			{
-				vm.SetError("function 'any(iterable, function)': second argument is not a function");
-				return Value();
-			}
-
-			for( const Value& element : array )
-			{
-				result = vm.CallFunction(function, { element });
-
+				result = vm.CallMemberFunction(objectUsed, hasNext, noArgs);
+				
 				if( vm.HasError() )
 					return Value();
-
-				if( result.AsBool() )
-					return true;
+				
+				if( !result.AsBool() )
+					break;
+		
+				result = vm.CallMemberFunction(objectUsed, getNext, noArgs);
+				
+				if( vm.HasError() )
+					return Value();
+					
+				if( !result.AsBool() )
+					return false;
 			}
-
-			return false;
+			
+			return true;
 		}
 		else
 		{
-			vm.SetError("function 'any' takes one or two arguments");
-			return Value();
-		}
-	}
-	else if( args[0].IsNativeGenerator() )
-	{
-		Generator* generator = args[0].nativeGenerator;
-
-		if( argsSize == 1 )
-		{
-			while( generator->implementation->has_value() )
-				if( generator->implementation->next_value().AsBool() )
-					return true;
-
-			return false;
-		}
-		else if( argsSize == 2 )
-		{
-			Value result;
-			Value& function = args[1];
+			const Value& function = args[1];
 
 			if( !function.IsFunction() )
 			{
-				vm.SetError("function 'any(iterable, function)': second argument is not a function");
+				vm.SetError("function 'all(iterable, [predicate])': second argument is not a function");
 				return Value();
 			}
-
-			while( generator->implementation->has_value() )
+			
+			while( true )
 			{
-				result = vm.CallFunction(function, { generator->implementation->next_value() });
+				result = vm.CallMemberFunction(objectUsed, hasNext, noArgs);
+				
+				if( vm.HasError() )
+					return Value();
+				
+				if( !result.AsBool() )
+					break;
+		
+				result = vm.CallMemberFunction(objectUsed, getNext, noArgs);
+				
+				if( vm.HasError() )
+					return Value();
+					
+				result = vm.CallFunction(function, {result});
 
 				if( vm.HasError() )
 					return Value();
 
-				if( result.AsBool() )
-					return true;
+				if( !result.AsBool() )
+					return false;
 			}
-
-			return false;
-		}
-		else
-		{
-			vm.SetError("function 'any' takes one or two arguments");
-			return Value();
+			
+			return true;
 		}
 	}
-	else if( args[0].IsObject() )
-	{
-		Value& object = args[0];
-
-		Value has_value = vm.GetMember(object, Symbol::HasValueHash);
-
-		if( !has_value.IsFunction() )
-		{
-			vm.SetError("function 'any(iterable)': iterable doesn't have 'has_value' function");
-			return Value();
-		}
-
-		Value next_value = vm.GetMember(object, Symbol::NextValueHash);
-
-		if( !next_value.IsFunction() )
-		{
-			vm.SetError("function 'any(iterable)': iterable doesn't have 'next_value' function");
-			return Value();
-		}
-
-		if( argsSize == 1 )
-		{
-			while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
-			{
-				if( vm.HasError() )
-					return Value();
-
-				Value nextValue = vm.CallMemberFunction(object, next_value, {});
-
-				if( vm.HasError() )
-					return Value();
-
-				if( nextValue.AsBool() )
-					return true;
-			}
-
-			return false;
-		}
-		else if( argsSize == 2 )
-		{
-			Value& function = args[1];
-
-			if( !function.IsFunction() )
-			{
-				vm.SetError("function 'any(iterable, function)': second argument is not a function");
-				return Value();
-			}
-
-			while( vm.CallMemberFunction(object, has_value, {}).AsBool() )
-			{
-				if( vm.HasError() )
-					return Value();
-
-				Value nextValue = vm.CallMemberFunction(object, next_value, {});
-
-				if( vm.HasError() )
-					return Value();
-
-				Value result = vm.CallFunction(function, { nextValue });
-
-				if( vm.HasError() )
-					return Value();
-
-				if( result.AsBool() )
-					return true;
-			}
-
-			return false;
-		}
-		else
-		{
-			vm.SetError("function 'any' takes one or two arguments");
-			return Value();
-		}
-	}
-	else
-	{
-		vm.SetError("function 'any(iterable)': iterable must be array, object or native-generator");
-		return Value();
-	}
-
+	
+	vm.SetError("function 'all(iterable, [predicate])': first argument not interable");
 	return Value();
 }
 
-Value Min(VirtualMachine& vm, std::vector<Value>& args)
+Value Any(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
+{
+	unsigned argsSize = args.size();
+
+	if( argsSize < 1 || argsSize > 2 )
+	{
+		vm.SetError("function 'any(iterable, [predicate])' takes one or two arguments");
+		return Value();
+	}
+	
+	if( Iterator* iterator = vm.MakeIteratorForValue( args[0] ) )
+	{
+		Value result;
+		std::vector<Value> noArgs;
+		Value& objectUsed	= iterator->implementation->thisObjectUsed;
+		Value& hasNext		= iterator->implementation->hasNextFunction;
+		Value& getNext		= iterator->implementation->getNextFunction;
+		
+		if( argsSize == 1 )
+		{
+			while( true )
+			{
+				result = vm.CallMemberFunction(objectUsed, hasNext, noArgs);
+				
+				if( vm.HasError() )
+					return Value();
+				
+				if( !result.AsBool() )
+					break;
+		
+				result = vm.CallMemberFunction(objectUsed, getNext, noArgs);
+				
+				if( vm.HasError() )
+					return Value();
+					
+				if( result.AsBool() )
+					return true;
+			}
+			
+			return false;
+		}
+		else // argsSize == 2
+		{
+			const Value& function = args[1];
+
+			if( !function.IsFunction() )
+			{
+				vm.SetError("function 'any(iterable, [predicate])': second argument is not a function");
+				return Value();
+			}
+			
+			while( true )
+			{
+				result = vm.CallMemberFunction(objectUsed, hasNext, noArgs);
+				
+				if( vm.HasError() )
+					return Value();
+				
+				if( !result.AsBool() )
+					break;
+		
+				result = vm.CallMemberFunction(objectUsed, getNext, noArgs);
+				
+				if( vm.HasError() )
+					return Value();
+					
+				result = vm.CallFunction(function, {result});
+
+				if( vm.HasError() )
+					return Value();
+
+				if( result.AsBool() )
+					return true;
+			}
+			
+			return false;
+		}
+	}
+	
+	vm.SetError("function 'any(iterable, [predicate])': first argument not interable");
+	return Value();
+}
+
+Value Min(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	vm.SetError("function 'min' is not implemented");
 	return Value();
 }
 
-Value Max(VirtualMachine& vm, std::vector<Value>& args)
+Value Max(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	vm.SetError("function 'max' is not implemented");
 	return Value();
 }
 
-Value Sort(VirtualMachine& vm, std::vector<Value>& args)
+Value Sort(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	vm.SetError("function 'sort' is not implemented");
 	return Value();
 }
 
-Value Abs(VirtualMachine& vm, std::vector<Value>& args)
+Value Abs(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -1107,7 +982,7 @@ Value Abs(VirtualMachine& vm, std::vector<Value>& args)
 	return std::abs(args[0].AsFloat());
 }
 
-Value Floor(VirtualMachine& vm, std::vector<Value>& args)
+Value Floor(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -1123,7 +998,7 @@ Value Floor(VirtualMachine& vm, std::vector<Value>& args)
 	return std::floor(args[0].AsFloat());
 }
 
-Value Ceil(VirtualMachine& vm, std::vector<Value>& args)
+Value Ceil(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -1139,7 +1014,7 @@ Value Ceil(VirtualMachine& vm, std::vector<Value>& args)
 	return std::ceil(args[0].AsFloat());
 }
 
-Value Round(VirtualMachine& vm, std::vector<Value>& args)
+Value Round(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -1155,7 +1030,7 @@ Value Round(VirtualMachine& vm, std::vector<Value>& args)
 	return std::round(args[0].AsFloat());
 }
 
-Value Sqrt(VirtualMachine& vm, std::vector<Value>& args)
+Value Sqrt(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -1171,7 +1046,7 @@ Value Sqrt(VirtualMachine& vm, std::vector<Value>& args)
 	return std::sqrt(args[0].AsFloat());
 }
 
-Value Sin(VirtualMachine& vm, std::vector<Value>& args)
+Value Sin(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -1187,7 +1062,7 @@ Value Sin(VirtualMachine& vm, std::vector<Value>& args)
 	return std::sin(args[0].AsFloat());
 }
 
-Value Cos(VirtualMachine& vm, std::vector<Value>& args)
+Value Cos(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{
@@ -1203,7 +1078,7 @@ Value Cos(VirtualMachine& vm, std::vector<Value>& args)
 	return std::cos(args[0].AsFloat());
 }
 
-Value Tan(VirtualMachine& vm, std::vector<Value>& args)
+Value Tan(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
 	if( args.size() != 1 )
 	{

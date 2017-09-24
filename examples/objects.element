@@ -108,3 +108,21 @@ Student =
 
 tim = Student.new("Tim", "FMI")
 tim.SayHi()
+
+
+// we can also use the indexing operator to access object members by their string names
+PrintFunctionsOf:(class)
+	class -> keys() -> filter(::class[$] -> type() == "function") -> print()
+
+AddGettersFor:(class)
+	$$ -> each(:(member) class["get_" ~ member] = ::this[member])
+
+
+// this way we can dynamically add or remove runtime generated members
+PrintFunctionsOf(Student)
+
+Student -> AddGettersFor("name", "school")
+
+PrintFunctionsOf(Student)
+
+tim.get_school() -> print()

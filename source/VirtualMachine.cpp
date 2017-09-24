@@ -32,7 +32,25 @@ Value VirtualMachine::Execute(const char* bytecode)
     mExecutionContext = &dummyContext;
     mStack = &dummyContext.stack;
 
-	return CallFunction_Common(nullptr, main, {});
+	return CallFunction_Common(Value(), main, {});
+}
+
+void VirtualMachine::ResetState()
+{
+	mMemoryManager.ResetState();
+	
+	mErrorMessage.clear();
+	
+	mConstantStrings.clear();
+	mConstantFunctions.clear();
+	mConstantCodeObjects.clear();
+	mConstants.clear();
+	
+	mNativeFunctions.clear();
+	mSymbolInfos.clear();
+	
+	mExecutionContext = nullptr;
+	mStack = nullptr;
 }
 
 int VirtualMachine::AddNativeFunction(Value::NativeFunction function)
@@ -72,6 +90,42 @@ void VirtualMachine::ClearError()
 	mErrorMessage.clear();
 }
 
+Iterator* VirtualMachine::MakeIteratorForValue(const Value& value)
+{
+	switch( value.type )
+	{
+	case Value::VT_Iterator:
+		return value.iterator;
+	
+	case Value::VT_Array:
+		return mMemoryManager.NewIterator( new ArrayIterator(value.array) );
+	
+	case Value::VT_String:
+		return mMemoryManager.NewIterator( new StringIterator(value.string) );
+	
+	case Value::VT_Object:
+	{
+		Value hasNextMemberFunction;
+		LoadMemberFromObject(value.object, Symbol::HasNextHash, &hasNextMemberFunction);
+		
+		Value getNextMemberFunction;
+		LoadMemberFromObject(value.object, Symbol::GetNextHash, &getNextMemberFunction);
+		
+		if( hasNextMemberFunction.IsNil() || getNextMemberFunction.IsNil() )
+			return nullptr;
+		
+		return mMemoryManager.NewIterator( new ObjectIterator(value, hasNextMemberFunction, getNextMemberFunction) );
+	}
+	
+	case Value::VT_Function:
+		if( value.function->executionContext ) // only coroutines
+			return mMemoryManager.NewIterator( new CoroutineIterator(value.function) );
+	
+	default:
+		return nullptr;
+	}
+}
+
 unsigned VirtualMachine::GetHashFromName(const std::string& name)
 {
 	unsigned hash = Symbol::Hash(name);
@@ -93,6 +147,20 @@ unsigned VirtualMachine::GetHashFromName(const std::string& name)
 		mSymbolInfos[hash] = {name, -1};
 
 	return hash;
+}
+
+bool VirtualMachine::GetNameFromHash(unsigned hash, std::string* name)
+{
+	auto it = mSymbolInfos.find(hash);
+	
+	if( it != mSymbolInfos.end() )
+	{
+		if( name )
+			*name = it->second.name;
+		return true;
+	}
+	
+	return false;
 }
 
 int VirtualMachine::GetGlobalIndex(const std::string& name) const
@@ -126,21 +194,26 @@ Value VirtualMachine::GetGlobal(int index) const
 	return Value();
 }
 
-Value VirtualMachine::GetMember(Value& object, const std::string& memberName)
+Value VirtualMachine::GetMember(const Value& object, const std::string& memberName)
 {
 	Value result;
 	LoadMemberFromObject(object.object, GetHashFromName(memberName), &result);
 	return result;
 }
 
-Value VirtualMachine::GetMember(Value& object, unsigned memberHash) const
+Value VirtualMachine::GetMember(const Value& object, unsigned memberHash) const
 {
 	Value result;
 	LoadMemberFromObject(object.object, memberHash, &result);
 	return result;
 }
 
-void VirtualMachine::SetMember(Value& object, unsigned memberHash, Value&& value)
+void VirtualMachine::SetMember(const Value& object, const std::string& memberName, const Value& value)
+{
+	StoreMemberInObject(object.object, GetHashFromName(memberName), value);
+}
+
+void VirtualMachine::SetMember(const Value& object, unsigned memberHash, const Value& value)
 {
 	StoreMemberInObject(object.object, memberHash, value);
 }
@@ -152,44 +225,43 @@ Value VirtualMachine::CallFunction(const std::string& name, const std::vector<Va
 	if( index < 0 ) // not found
 		return Value();
 
-	return CallFunction_Common(nullptr, GetGlobal(index), args);
+	return CallFunction_Common(Value(), GetGlobal(index), args);
 }
 
 Value VirtualMachine::CallFunction(int index, const std::vector<Value>& args)
 {
-	return CallFunction_Common(nullptr, GetGlobal(index), args);
+	return CallFunction_Common(Value(), GetGlobal(index), args);
 }
 
 Value VirtualMachine::CallFunction(const Value& function, const std::vector<Value>& args)
 {
-	return CallFunction_Common(nullptr, function, args);
+	return CallFunction_Common(Value(), function, args);
 }
 
-Value VirtualMachine::CallMemberFunction(Value& object, const std::string& memberFunctionName, const std::vector<Value>& args)
+Value VirtualMachine::CallMemberFunction(const Value& object, const std::string& memberFunctionName, const std::vector<Value>& args)
 {
 	Value memberFunction = GetMember(object, memberFunctionName);
 
-	return CallFunction_Common(object.object, memberFunction, args);
+	return CallFunction_Common(object, memberFunction, args);
 }
 
-Value VirtualMachine::CallMemberFunction(Value& object, unsigned functionHash, const std::vector<Value>& args)
+Value VirtualMachine::CallMemberFunction(const Value& object, unsigned functionHash, const std::vector<Value>& args)
 {
 	Value memberFunction = GetMember(object, functionHash);
 
-	return CallFunction_Common(object.object, memberFunction, args);
+	return CallFunction_Common(object, memberFunction, args);
 }
 
 Value VirtualMachine::CallMemberFunction(const Value& object, const Value& function, const std::vector<Value>& args)
 {
-	return CallFunction_Common(object.object, function, args);
+	return CallFunction_Common(object, function, args);
 }
 
-Value VirtualMachine::CallFunction_Common(Object* thisObject, const Value& function, const std::vector<Value>& args)
+Value VirtualMachine::CallFunction_Common(const Value& thisObject, const Value& function, const std::vector<Value>& args)
 {
 	if( function.type == Value::VT_NativeFunction )
 	{
-		std::vector<Value> nonConstArgs(args); // TODO: fix this!
-		return function.nativeFunction(*this, nonConstArgs);
+		return function.nativeFunction(*this, thisObject, args);
 	}
 	else // normal function
 	{
@@ -600,76 +672,130 @@ void VirtualMachine::RunCodeForFrame(StackFrame* frame)
 			break;
 		}
 
-		case OC_LoadElement: // TOS is the index in the TOS1 array
+		case OC_LoadElement: // TOS is the index in the TOS1 array or object
 		{
-			if( ! mStack->back().IsInt() )
+			Value index = mStack->back();
+			mStack->pop_back();
+			
+			Value container = mStack->back();
+			mStack->pop_back();
+			
+			if( container.IsArray() )
 			{
-				SetError("Array index must be an integer");
+				if( ! index.IsInt() )
+				{
+					SetError("Array index must be an integer");
+					return;
+				}
+
+				mStack->emplace_back(); // the value to get
+				LoadElementFromArray(container.array, index.AsInt(), &mStack->back());
+				
+				if( HasError() )
+					return;
+			}
+			else if( container.IsObject() )
+			{
+				if( ! index.IsString() )
+				{
+					SetError("Object index must be a string");
+					return;
+				}
+				
+				mStack->emplace_back(); // the value to get
+				LoadMemberFromObject(container.object, GetHashFromName(index.AsString()), &mStack->back());
+			}
+			else // error
+			{
+				SetError("The indexing operator only operates on arrays and objects");
 				return;
 			}
-
-			int index = mStack->back().AsInt();
-			mStack->pop_back();
-
-			if( ! mStack->back().IsArray() )
-			{
-				SetError("Attempt to index a non-array value");
-				return;
-			}
-
-			const Array* array = mStack->back().array;
-			mStack->pop_back();
-			mStack->emplace_back(); // the value to get
-			LoadElementFromArray(array, index, &mStack->back());
+			
 			++frame->ip;
 			break;
 		}
 
-		case OC_StoreElement: // TOS index, TOS1 array, TOS2 new value
+		case OC_StoreElement: // TOS index, TOS1 array or object, TOS2 new value
 		{
-			if( ! mStack->back().IsInt() )
+			Value index = mStack->back();
+			mStack->pop_back();
+			
+			Value container = mStack->back();
+			mStack->pop_back();
+			
+			if( container.IsArray() )
 			{
-				SetError("Array index must be an integer");
+				if( ! index.IsInt() )
+				{
+					SetError("Array index must be an integer");
+					return;
+				}
+
+				StoreElementInArray(container.array, index.AsInt(), mStack->back());
+				
+				if( HasError() )
+					return;
+			}
+			else if( container.IsObject() )
+			{
+				if( ! index.IsString() )
+				{
+					SetError("Object index must be a string");
+					return;
+				}
+				
+				StoreMemberInObject(container.object, GetHashFromName(index.AsString()), mStack->back());
+			}
+			else // error
+			{
+				SetError("The indexing operator only operates on arrays and objects");
 				return;
 			}
-
-			int index = mStack->back().AsInt();
-			mStack->pop_back();
-
-			if( ! mStack->back().IsArray() )
-			{
-				SetError("Attempt to index a non-array value");
-				return;
-			}
-
-			Array* array = mStack->back().array;
-			mStack->pop_back();
-			StoreElementInArray(array, index, mStack->back());
+			
 			++frame->ip;
 			break;
 		}
 
-		case OC_PopStoreElement: // TOS index, TOS1 array, TOS2 new value
+		case OC_PopStoreElement: // TOS index, TOS1 array or object, TOS2 new value
 		{
-			if( ! mStack->back().IsInt() )
+			Value index = mStack->back();
+			mStack->pop_back();
+			
+			Value container = mStack->back();
+			mStack->pop_back();
+			
+			if( container.IsArray() )
 			{
-				SetError("Array index must be an integer");
+				if( ! index.IsInt() )
+				{
+					SetError("Array index must be an integer");
+					return;
+				}
+
+				StoreElementInArray(container.array, index.AsInt(), mStack->back());
+				
+				if( HasError() )
+					return;
+				
+				mStack->pop_back();
+			}
+			else if( container.IsObject() )
+			{
+				if( ! index.IsString() )
+				{
+					SetError("Object index must be a string");
+					return;
+				}
+				
+				StoreMemberInObject(container.object, GetHashFromName(index.AsString()), mStack->back());
+				mStack->pop_back();
+			}
+			else // error
+			{
+				SetError("The indexing operator only operates on arrays and objects");
 				return;
 			}
-
-			int index = mStack->back().AsInt();
-			mStack->pop_back();
-
-			if( ! mStack->back().IsArray() )
-			{
-				SetError("Attempt to index a non-array value");
-				return;
-			}
-
-			Array* array = mStack->back().array;
-			mStack->pop_back();
-			StoreElementInArray(array, index, mStack->back());
-			mStack->pop_back();
+			
 			++frame->ip;
 			break;
 		}
@@ -778,10 +904,10 @@ void VirtualMachine::RunCodeForFrame(StackFrame* frame)
 				return;
 			}
 
-			mExecutionContext->lastObject = mStack->back().object;
+			mExecutionContext->lastObject = mStack->back();
 			mStack->pop_back();
 			mStack->emplace_back(); // the value to get
-			LoadMemberFromObject(mExecutionContext->lastObject, hash, &mStack->back());
+			LoadMemberFromObject(mExecutionContext->lastObject.object, hash, &mStack->back());
 			++frame->ip;
 			break;
 		}
@@ -823,54 +949,42 @@ void VirtualMachine::RunCodeForFrame(StackFrame* frame)
 			break;
 		}
 
-		case OC_MakeGenerator: // make a generator object from TOS and replace it at TOS
+		case OC_MakeIterator: // make an iterator object from TOS and replace it at TOS
 		{
-			Value::Type type = mStack->back().type;
-			if( type == Value::VT_Array )
+			Iterator* iterator = MakeIteratorForValue( mStack->back() );
+			
+			if( iterator )
 			{
-				Generator* generator = mMemoryManager.NewGeneratorArray( mStack->back().array );
 				mStack->pop_back();
-				mStack->emplace_back(generator);
+				mStack->emplace_back(iterator);
+				++frame->ip;
+				break;
 			}
-			else if( type == Value::VT_String )
+			else // error
 			{
-				Generator* generator = mMemoryManager.NewGeneratorString( mStack->back().string );
-				mStack->pop_back();
-				mStack->emplace_back(generator);
-			}
-			else if( type == Value::VT_NativeGenerator )
-			{
-				// everything should be OK...
-			}
-			else if( ! mStack->back().IsObject() )
-			{
-				SetError("A generator value must be an object");
+				if( mStack->back().type == Value::VT_Function && 
+					mStack->back().function->executionContext == nullptr )
+				{
+					SetError("Cannot iterate a function. Only coroutine instances are iterable.");
+				}
+				else
+				{
+					SetError("Value not iterable.");
+				}
 				return;
 			}
-
-			++frame->ip;
-			break;
 		}
 
-		case OC_GeneratorHasValue: // call 'has_value' from the TOS object
+		case OC_IteratorHasNext: // call 'has_next' from the TOS object
 		{
-			if( mStack->back().IsNativeGenerator() )
+			if( mStack->back().IsIterator() )
 			{
-				mStack->emplace_back( mStack->back().nativeGenerator->implementation->has_value() );
-				++frame->ip;
-			}
-			else if( mStack->back().IsObject() ) // user defined generator object
-			{
-				mExecutionContext->lastObject = mStack->back().object;
-				mStack->emplace_back();
-				LoadMemberFromObject(mExecutionContext->lastObject, Symbol::HasValueHash, &mStack->back());
-
-				if( ! mStack->back().IsFunction() )
-				{
-					SetError("No 'has_value' function found in generator object");
-					return;
-				}
-
+				IteratorImplementation* ii = mStack->back().iterator->implementation;
+				
+				mExecutionContext->lastObject = ii->thisObjectUsed;
+				
+				mStack->push_back( ii->hasNextFunction );
+				
 				if( mStack->back().type == Value::VT_NativeFunction )
 				{
 					CallNative(0);
@@ -890,31 +1004,22 @@ void VirtualMachine::RunCodeForFrame(StackFrame* frame)
 			}
 			else
 			{
-				SetError("Value is not a generator");
+				SetError("Value is not an iterator");
 				return;
 			}
 			break;
 		}
 
-		case OC_GeneratorNextValue: // call 'next_value' from the TOS object
+		case OC_IteratorGetNext: // call 'get_next' from the TOS object
 		{
-			if( mStack->back().IsNativeGenerator() )
+			if( mStack->back().IsIterator() )
 			{
-				mStack->emplace_back(mStack->back().nativeGenerator->implementation->next_value());
-				++frame->ip;
-			}
-			else if( mStack->back().IsObject() ) // user defined generator object
-			{
-				mExecutionContext->lastObject = mStack->back().object;
-				mStack->emplace_back();
-				LoadMemberFromObject(mExecutionContext->lastObject, Symbol::NextValueHash, &mStack->back());
-
-				if( ! mStack->back().IsFunction() )
-				{
-					SetError("No 'next_value' function found in generator object");
-					return;
-				}
-
+				IteratorImplementation* ii = mStack->back().iterator->implementation;
+				
+				mExecutionContext->lastObject = ii->thisObjectUsed;
+				
+				mStack->push_back( ii->getNextFunction );
+				
 				if( mStack->back().type == Value::VT_NativeFunction )
 				{
 					CallNative(0);
@@ -934,7 +1039,7 @@ void VirtualMachine::RunCodeForFrame(StackFrame* frame)
 			}
 			else
 			{
-				SetError("Value is not a generator");
+				SetError("Value is not an iterator");
 				return;
 			}
 			break;
@@ -1255,6 +1360,8 @@ void VirtualMachine::Call(int argumentsCount)
 
 	if( function->executionContext )
 	{
+		function->executionContext->parent = mExecutionContext;
+		
 		if( function->executionContext->state == ExecutionContext::CRS_Started )
 		{
 			Value valueToSend;
@@ -1290,8 +1397,6 @@ void VirtualMachine::Call(int argumentsCount)
 		}
 		if( function->executionContext->state == ExecutionContext::CRS_NotStarted )
 		{
-			function->executionContext->parent = mExecutionContext;
-
 			// we will extract the arguments from the stack of the old context
 			sourceStack = mStack;
 
@@ -1311,7 +1416,7 @@ void VirtualMachine::Call(int argumentsCount)
 	newFrame->function		= function;
 	newFrame->instructions	= codeObject->instructions.data();
 	newFrame->ip			= newFrame->instructions;
-	newFrame->thisObject	= mExecutionContext->lastObject;
+	newFrame->thisObject	= mExecutionContext->lastObject.object;
 
 	newFrame->variables.resize( codeObject->localVariablesCount );
 
@@ -1346,45 +1451,40 @@ void VirtualMachine::CallNative(int argumentsCount)
 		arguments[i] = mStack->back();
 		mStack->pop_back();
 	}
-
-	Value result = function(*this, arguments);
+	
+	Value result = function(*this, mExecutionContext->lastObject, arguments);
 
 	mStack->push_back(result);
 }
 
-void VirtualMachine::LoadElementFromArray(const Array* array, int index, Value* outValue) const
+void VirtualMachine::LoadElementFromArray(const Array* array, int index, Value* outValue)
 {
 	int size = int(array->elements.size());
 
-	if( size == 0 )
+	if( index < 0 )
+		index += size;
+	
+	if( index < 0 || index >= size )
 	{
-		*outValue = Value();
+		SetError("Array index out of range");
 		return;
 	}
-
-	while( index < 0 )
-		index += size;
 
 	*outValue = array->elements[index];
 }
 
-void VirtualMachine::StoreElementInArray(Array* array, int index, Value& newValue)
+void VirtualMachine::StoreElementInArray(Array* array, int index, const Value& newValue)
 {
 	int size = int(array->elements.size());
 
-	if( size == 0 )
-	{
-		if( index < 0 )
-			index = 0;
-	}
-	else
-	{
-		while( index < 0 )
-			index += size;
-	}
+	if( index < 0 )
+		index += size;
 
-	if( index >= size )
-		array->elements.resize(index + 1);
+	if( index < 0 || index >= size )
+	{
+		SetError("Array index out of range");
+		return;
+	}
 
 	array->elements[index] = newValue;
 
@@ -1401,7 +1501,8 @@ void VirtualMachine::LoadMemberFromObject(Object* object, unsigned hash, Value* 
 	{
 		const Value* proto = &object->members[0].value;
 
-		while( proto->type == Value::VT_Object ) // it has a proto object
+		while(	proto->type == Value::VT_Object && // it has a proto object
+				proto->object != object ) // and it is not the first object
 		{
 			std::vector<Object::Member>& members = proto->object->members;
 
@@ -1426,7 +1527,7 @@ void VirtualMachine::LoadMemberFromObject(Object* object, unsigned hash, Value* 
 	}
 }
 
-void VirtualMachine::StoreMemberInObject(Object* object, unsigned hash, Value& newValue)
+void VirtualMachine::StoreMemberInObject(Object* object, unsigned hash, const Value& newValue)
 {
 	Object::Member member(hash);
 
@@ -1437,7 +1538,8 @@ void VirtualMachine::StoreMemberInObject(Object* object, unsigned hash, Value& n
 		bool found = false;
 		const Value* proto = &object->members[0].value;
 
-		while( proto->type == Value::VT_Object ) // it has a proto object
+		while(	proto->type == Value::VT_Object && // it has a proto object
+				proto->object != object ) // and it is not the first object
 		{
 			std::vector<Object::Member>& members = proto->object->members;
 
@@ -1596,7 +1698,10 @@ bool VirtualMachine::DoBinaryOperation(int opCode)
 		{
 			if( lhs.IsNumber() && rhs.IsNumber() )
 			{
-				result = Value( lhs.AsInt() % rhs.AsInt() );
+				if( lhs.IsInt() && rhs.IsInt() )
+					result = Value( lhs.AsInt() % rhs.AsInt() );
+				else
+					result = Value( std::fmod(lhs.AsFloat(), rhs.AsFloat()) );
 			}
 			else
 			{
@@ -1623,27 +1728,61 @@ bool VirtualMachine::DoBinaryOperation(int opCode)
 
 		case OC_Equal:
 		{
-			if( lhs.IsNumber() && rhs.IsNumber() )
+			if( lhs.IsInt() && rhs.IsInt() )
+			{
+				result = lhs.AsInt() == rhs.AsInt();
+			}
+			else if( lhs.IsNumber() && rhs.IsNumber() )
+			{
 				result = lhs.AsFloat() == rhs.AsFloat();
-			else if( lhs.IsBoolean() && rhs.IsBoolean() )
-				result = lhs.AsBool() == rhs.AsBool();
-			else if( lhs.IsString() && rhs.IsString() )
-				result = lhs.AsString() == rhs.AsString();
+			}
+			else if( lhs.type == rhs.type )
+			{
+				if( lhs.IsNil() )
+					result = true;
+				else if( lhs.IsBoolean() )
+					result = lhs.AsBool() == rhs.AsBool();
+				else if( lhs.IsHash() )
+					result = lhs.hash == rhs.hash;
+				else if( lhs.IsString() || lhs.IsError() )
+					result = lhs.AsString() == rhs.AsString();
+				else
+					result = lhs.object == rhs.object; // compare any pointers
+			}
 			else
-				result = lhs.object == rhs.object; // compare any pointers
+			{
+				result = false;
+			}
 			break;
 		}
 
 		case OC_NotEqual:
 		{
-			if( lhs.IsNumber() && rhs.IsNumber() )
+			if( lhs.IsInt() && rhs.IsInt() )
+			{
+				result = lhs.AsInt() != rhs.AsInt();
+			}
+			else if( lhs.IsNumber() && rhs.IsNumber() )
+			{
 				result = lhs.AsFloat() != rhs.AsFloat();
-			else if( lhs.IsBoolean() && rhs.IsBoolean() )
-				result = lhs.AsBool() != rhs.AsBool();
-			else if( lhs.IsString() && rhs.IsString() )
-				result = lhs.AsString() != rhs.AsString();
+			}
+			else if( lhs.type == rhs.type )
+			{
+				if( lhs.IsNil() )
+					result = false;
+				else if( lhs.IsBoolean() )
+					result = lhs.AsBool() != rhs.AsBool();
+				else if( lhs.IsHash() )
+					result = lhs.hash != rhs.hash;
+				else if( lhs.IsString() || lhs.IsError() )
+					result = lhs.AsString() != rhs.AsString();
+				else
+					result = lhs.object != rhs.object; // compare any pointers
+			}
 			else
-				result = lhs.object != rhs.object; // compare any pointers
+			{
+				result = true;
+			}
 			break;
 		}
 

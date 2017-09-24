@@ -1,0 +1,46 @@
+// 'for' loops work only with iterator objects, arrays are implicitly converted to iterators
+for( i in ["a", "b", "c"] )
+	print(i)
+
+// you can also convert them explicitly
+g = make_iterator([1, 2, 3])
+
+for( i in g )
+	print(i)
+
+// 'range' creates an iterator object, which can be iterated
+for( i in range(10, 100, 5) )
+	print(i)
+
+// custom iterator objects, need to specify a 'has_next' and a 'get_next' functions
+factorials_iterator:(_n)
+[	i = 0,
+	n = _n,
+	factorial = 1,
+	has_next :: this.i <= this.n,
+	get_next ::
+	{	v = this.factorial
+		this.i += 1
+		this.factorial *= this.i
+		return v
+	}
+]
+
+// then they can also be iterated using a 'for' expression
+for( i in factorials_iterator(7) )
+	print(i)
+
+// you can also iterate over the values yielded by a coroutine as if it was an iterator
+c = make_coroutine(::
+{
+	yield  "foo"
+	yield  "bar"
+	return "baz"
+})
+
+for( i in c )
+	print(i)
+
+// certain standard functions can work on iterators as well as on arrays
+range(10) -> each(::$ -> print())
+range(2, 8) -> reduce(::$ * $1) -> print()

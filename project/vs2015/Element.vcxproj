@@ -122,9 +122,19 @@
     <None Include="..\..\examples\flow-control.element" />
     <None Include="..\..\examples\functions.element" />
     <None Include="..\..\examples\gc-tests.element" />
-    <None Include="..\..\examples\generators.element" />
+    <None Include="..\..\examples\iterators.element" />
     <None Include="..\..\examples\objects.element" />
     <None Include="..\..\examples\test.element" />
+    <None Include="..\..\tests\0-syntax.element" />
+    <None Include="..\..\tests\1-basic-types.element" />
+    <None Include="..\..\tests\2-flow-control.element" />
+    <None Include="..\..\tests\3-functions.element" />
+    <None Include="..\..\tests\4-arrays.element" />
+    <None Include="..\..\tests\5-objects.element" />
+    <None Include="..\..\tests\6-closures.element" />
+    <None Include="..\..\tests\7-coroutines.element" />
+    <None Include="..\..\tests\8-iteration.element" />
+    <None Include="..\..\tests\9-standard-native-functions.element" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

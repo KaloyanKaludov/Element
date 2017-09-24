@@ -8,6 +8,9 @@
     <Filter Include="examples">
       <UniqueIdentifier>{b152cb16-8bfa-45eb-bb3c-99e2b6df886f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="tests">
+      <UniqueIdentifier>{8d646311-5b86-4e6e-913b-42d01f28a8d6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\AST.cpp">
@@ -131,9 +134,6 @@
     <None Include="..\..\examples\functions.element">
       <Filter>examples</Filter>
     </None>
-    <None Include="..\..\examples\generators.element">
-      <Filter>examples</Filter>
-    </None>
     <None Include="..\..\examples\objects.element">
       <Filter>examples</Filter>
     </None>
@@ -148,6 +148,39 @@
     </None>
     <None Include="..\..\examples\gc-tests.element">
       <Filter>examples</Filter>
+    </None>
+    <None Include="..\..\examples\iterators.element">
+      <Filter>examples</Filter>
+    </None>
+    <None Include="..\..\tests\0-syntax.element">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\1-basic-types.element">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\2-flow-control.element">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\3-functions.element">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\4-arrays.element">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\5-objects.element">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\6-closures.element">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\7-coroutines.element">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\8-iteration.element">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\9-standard-native-functions.element">
+      <Filter>tests</Filter>
     </None>
   </ItemGroup>
 </Project>

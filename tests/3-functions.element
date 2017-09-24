@@ -1,0 +1,180 @@
+TEST_CASE function and call definition 1
+
+sum = :(a, b) { return a + b }
+
+sum(2, 3) == 5
+
+TEST_CASE function and call definition 2
+
+sum:(a, b) { return a + b }
+
+sum(4, 3) == 7
+
+TEST_CASE function and call definition 3
+
+sum:(a, b) { a + b }
+
+sum(7, 1) == 8
+
+TEST_CASE function and call definition 4
+
+sum:(a, b) a + b
+
+sum(2, 2) == 4
+
+TEST_CASE function and call definition 5
+
+sum:(a) a + $
+
+sum(1, 3) == 4
+
+TEST_CASE function and call definition 6
+
+sum :: $ + $1
+
+sum(10, 3) == 13
+
+TEST_CASE function and call definition 7
+
+(:: $ + $1)(7, 5) == 12
+
+TEST_CASE function and call definition 8
+
+sum :: $ + $1
+
+1 -> sum(2) == 3
+
+TEST_CASE MUST_BE_ERROR the arrow operator must have a function call on its right-hand size
+
+f :: nil
+
+12 -> f
+
+TEST_CASE recursion
+
+factorial:(n)
+	if( n == 0 ) 1
+	else n * factorial(n - 1)
+
+factorial(7) == 5040
+
+TEST_CASE getting anonymous parameters 1
+
+f :: $ + 1
+
+f(2) == 3
+
+TEST_CASE getting anonymous parameters 2
+
+f :: $ + $1
+
+f(4, 5) == 9
+
+TEST_CASE getting anonymous parameters 3
+
+f :: $3
+
+f(0, 1, 2, 3, 4, 5) == 3
+
+TEST_CASE first anonymous parameter can be both $ and $0
+
+f :: $ == $0
+
+f(4, 5) == true
+
+TEST_CASE MUST_BE_ERROR assigning to an anonymous parameter
+
+f :: $ = 1
+
+TEST_CASE anonymous parameters start after the last named parameter
+
+f:(a, b) $1
+
+f("a", "b", "c", "d", "e") == "d"
+
+TEST_CASE getting all anonymous parameters using the $$ array
+
+all_arguments ::
+{
+	a = []
+	for( arg in $$ )
+		a << arg
+	return a
+}
+
+v0 = all_arguments(1, 2, 3, 4)
+v1 = all_arguments("first", "second")
+
+#v0 == 4 and
+#v1 == 2 and
+v0[1] == 2 and
+v1[0] == "first"
+
+TEST_CASE MUST_BE_ERROR assigning to the $$ array
+
+f :: $$ = []
+
+f(1, 2, 3)
+
+TEST_CASE MUST_BE_ERROR assigning a variable to the $$ array
+
+f :: a = $$
+
+f(1, 2, 3)
+
+TEST_CASE MUST_BE_ERROR changing an element of the $$ array
+
+f :: $$[1] = 2
+
+f(1, 2, 3)
+
+TEST_CASE missing argument results in a nil parameter 1
+
+f :(a, b, c) c == nil
+
+f("a", "b")
+
+TEST_CASE missing argument results in a nil parameter 2
+
+f :(a, b) a == nil and b == nil
+
+f()
+
+TEST_CASE missing argument results in a nil parameter 3
+
+f :(a, b) $ == nil
+
+f(7, 3)
+
+TEST_CASE last evaluated expression is the return value
+
+f ::
+{
+	"a" ~ "b"
+	17 + 13
+	4 * 5
+}
+
+f() == 20
+
+TEST_CASE return early from a function
+
+f ::
+{
+	a = 7
+	return a
+	a = 8
+}
+
+f() == 7
+
+TEST_CASE return without an expression
+
+f ::
+{
+	a = 71
+	return
+	a = 81
+}
+
+f() == nil

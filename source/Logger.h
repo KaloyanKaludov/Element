@@ -22,12 +22,12 @@ struct SourceCoords
 class Logger
 {
 public:
-	void PushError(int line, const char* format, ...);
-	void PushError(const SourceCoords& coords, const char* format, ...);
+	void		PushError(int line, const char* format, ...);
+	void		PushError(const SourceCoords& coords, const char* format, ...);
 	
-	bool HasErrorMessages() const;
-	void PrintErrorMessages() const;
-	void ClearErrorMessages();
+	bool		HasErrorMessages() const;
+	std::string	GetCombinedErrorMessages() const;
+	void		ClearErrorMessages();
 
 private:
 	std::vector<std::string> mErrorMessages;

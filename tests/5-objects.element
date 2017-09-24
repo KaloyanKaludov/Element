@@ -1,0 +1,188 @@
+TEST_CASE object member access
+
+o = [x=1, y=2, z=3]
+
+o.z == 3
+
+TEST_CASE getting the size of an object
+
+o = [x=1, y=2, z=3]
+
+#o == 4
+
+TEST_CASE getting the size of an empty object
+
+o = [=]
+
+#o == 1 // the proto member
+
+TEST_CASE getting non-existent object member results in a nil
+
+o = [x=1, y=2, z=3]
+
+o.w == nil
+
+TEST_CASE object member access using the indexing operator
+
+o = [x=1, y=2, z=3]
+
+o["w"] = 7
+o["w"] == 7
+
+TEST_CASE object adding new members at runtime
+
+o = [x=1, y=2, z=3]
+
+o["w"] = 9
+o.x == 1 and o.w == 9
+
+TEST_CASE new object has a nil proto member
+
+o = [x=1, y=2]
+
+o.proto == nil
+
+TEST_CASE setting a proto member
+
+p = [z=3]
+o = [x=1, y=2]
+
+o.proto = p
+
+o.z == 3
+
+TEST_CASE changing the proto object affects our object
+
+p = [z=3]
+o = [x=1, y=2]
+
+o.proto = p
+
+p.z = 5
+
+o.z == 5
+
+TEST_CASE the proto object does not have access to our object's members
+
+p = [z=3]
+o = [x=1, y=2]
+
+o.proto = p
+
+p.x == nil
+
+TEST_CASE size of our object is not affected by the proto object
+
+p = [z=3]
+o = [x=1, y=2]
+
+o.proto = p
+
+#o == 3
+
+TEST_CASE size of the proto object is not affected by our object
+
+p = [z=3]
+o = [x=1, y=2]
+
+o.proto = p
+
+#p == 2
+
+TEST_CASE longer proto chain
+
+o0 = [a=0]
+o1 = [b=1]
+o2 = [c=2]
+o3 = [d=3]
+
+o0.proto = o1
+o1.proto = o2
+o2.proto = o3
+
+o0.a == 0 and
+o0.b == 1 and
+o0.c == 2 and
+o0.d == 3
+
+TEST_CASE missing member in proto chain is nil
+
+p = [z=3]
+o = [x=1, y=2]
+
+o.proto = p
+
+o.w == nil
+
+TEST_CASE adding a new member adds it to the lowest object
+
+p = [z=3]
+o = [x=1, y=2]
+
+o.proto = p
+
+o.w = 7
+
+o.w == 7 and
+p.w == nil
+
+TEST_CASE member lookup should terminate in proto chain cycles 1
+
+p = [y=2]
+o = [x=1]
+
+o.proto = p
+p.proto = o
+
+o.z == nil
+
+TEST_CASE member lookup should terminate in proto chain cycles 2
+
+p = [y=2]
+o = [x=1]
+
+o.proto = p
+p.proto = o
+
+o.z = 3
+
+o.z == 3
+
+TEST_CASE proto chains are only followed if the proto member is an object 1
+
+o = [=]
+o.proto = 7
+
+o.x == nil
+
+TEST_CASE proto chains are only followed if the proto member is an object 2
+
+o = [=]
+o.proto = [1, 2, 3]
+
+o.x == nil
+
+TEST_CASE the this variable refers the owning object
+
+f :: this.a + 1
+
+o0 = [a=6]
+o0.g = f
+
+o1 = [a=9]
+o1.g = f
+
+o0.g() == 7 and
+o1.g() == 10
+
+TEST_CASE the this variable is nil outside of an object context
+
+this == nil
+
+TEST_CASE MUST_BE_ERROR the this variable is not assignable
+
+o = [
+	f :: this = nil
+]
+
+o.f()

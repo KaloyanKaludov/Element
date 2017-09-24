@@ -101,50 +101,67 @@ struct Function : public GarbageCollected
 };
 
 
-struct GeneratorImplementation
+struct IteratorImplementation
 {
-	virtual ~GeneratorImplementation() = default;
-	virtual bool has_value() = 0;
-	virtual Value next_value() = 0;
+	virtual ~IteratorImplementation() = default;
 	virtual void UpdateGrayList(std::deque<GarbageCollected*>& grayList,
-								GarbageCollected::State currentWhite) = 0;
+								GarbageCollected::State currentWhite) {};
+	Value thisObjectUsed;
+	Value hasNextFunction;
+	Value getNextFunction;
 };
 
 
-struct Generator : public GarbageCollected
+struct Iterator : public GarbageCollected
 {
-	Generator(GeneratorImplementation* implementation);
-	~Generator();
+	Iterator(IteratorImplementation* implementation);
+	~Iterator();
 
-	GeneratorImplementation* implementation;
+	// The implementation has virtual methods and thus creates virtual tables.
+	// For this reason it cannot be a derived struct of the 'Iterator' struct
+	// because it will mess up the expected memory layout.
+	IteratorImplementation* implementation;
 };
 
 
-struct ArrayGenerator : public GeneratorImplementation
+struct ArrayIterator : public IteratorImplementation
 {
 	Array* array;
 
 	unsigned currentIndex = 0;
 
-	ArrayGenerator(Array* array);
-
-	virtual bool has_value() override;
-	virtual Value next_value() override;
+	ArrayIterator(Array* array);
 
 	virtual void UpdateGrayList(std::deque<GarbageCollected*>& grayList,
 								GarbageCollected::State currentWhite) override;
 };
 
-struct StringGenerator : public GeneratorImplementation
+
+struct StringIterator : public IteratorImplementation
 {
 	String* str;
 
 	unsigned currentIndex = 0;
 
-	StringGenerator(String* str);
+	StringIterator(String* str);
 
-	virtual bool has_value() override;
-	virtual Value next_value() override;
+	virtual void UpdateGrayList(std::deque<GarbageCollected*>& grayList,
+								GarbageCollected::State currentWhite) override;
+};
+
+
+struct ObjectIterator : public IteratorImplementation
+{
+	ObjectIterator(const Value& object, const Value& hasNext, const Value& getNext);
+
+	virtual void UpdateGrayList(std::deque<GarbageCollected*>& grayList,
+								GarbageCollected::State currentWhite) override;
+};
+
+
+struct CoroutineIterator : public IteratorImplementation
+{
+	CoroutineIterator(Function* coroutine);
 
 	virtual void UpdateGrayList(std::deque<GarbageCollected*>& grayList,
 								GarbageCollected::State currentWhite) override;

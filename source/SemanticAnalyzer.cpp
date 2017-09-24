@@ -133,12 +133,12 @@ bool SemanticAnalyzer::AnalyzeNode(ast::Node* node)
 	{
 		ast::ForNode* n = (ast::ForNode*)node;
 
-		if( ! CheckAssignable(n->iterator) )
+		if( ! CheckAssignable(n->iteratingVariable) )
 			return false;
 
 		mContext.push_back(CXT_InLoop);
 
-		bool ok = 	AnalyzeNode(n->iterator)			&&
+		bool ok = 	AnalyzeNode(n->iteratingVariable)	&&
 					AnalyzeNode(n->iteratedExpression)	&&
 					AnalyzeNode(n->body);
 
@@ -621,7 +621,7 @@ void SemanticAnalyzer::ResolveNamesInNodes(std::vector<ast::Node*> nodesToProces
 			ast::ForNode* n = (ast::ForNode*)node;
 			nodesToProcess.push_back(n->body);
 			nodesToProcess.push_back(n->iteratedExpression);
-			nodesToProcess.push_back(n->iterator);
+			nodesToProcess.push_back(n->iteratingVariable);
 			break;
 		}
 
@@ -856,12 +856,12 @@ bool SemanticAnalyzer::TryToFindNameInTheEnclosingFunctions(ast::VariableNode* v
 	bool found = false;
 	int foundAtIndex = 0;
 	const std::string& name = vn->name;
-
+	
 	const auto makeBoxed = [](FunctionScope& fs, int index)
 	{
 		for( ast::VariableNode* vn : fs.node->referencedVariables )
 		{
-			if( vn->index == index )
+			if( vn->semanticType == ast::VariableNode::SMT_Local && vn->index == index )
 				vn->semanticType = ast::VariableNode::SMT_LocalBoxed;
 		}
 
@@ -958,7 +958,7 @@ bool SemanticAnalyzer::TryToFindNameInTheEnclosingFunctions(ast::VariableNode* v
 
 			vn->semanticType	= ast::VariableNode::SMT_FreeVariable;
 			vn->index			= int(localFunctionScope.freeVariables.size()) - 1;
-			vn->firstOccurrence = true;
+			vn->firstOccurrence = false; // first occurrence was where it was originally defined
 
 			return true;
 		}

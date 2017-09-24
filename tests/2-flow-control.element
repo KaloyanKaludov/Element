@@ -1,0 +1,250 @@
+TEST_CASE if expression chooses the then path
+
+a = 1
+
+if( true )
+	a = 2
+
+a == 2
+
+TEST_CASE if expression chooses the else path
+
+a = 1
+
+if( false )
+	a = 2
+
+a == 1
+
+TEST_CASE if with block and boolean logic
+
+a = 1
+
+if( false or true )
+{
+	a = 2
+	a = 3
+}
+
+a == 3
+
+TEST_CASE if-else expression chooses the then path
+
+a = 7
+
+if( true )
+	a = 8
+else
+	a = 9
+
+a == 8
+
+TEST_CASE if-else expression chooses the else path
+
+a = 7
+
+if( false )
+	a = 8
+else
+	a = 9
+
+a == 9
+
+TEST_CASE if-elif-else
+
+a = 0
+
+if( false )
+	a = 1
+elif( true )
+	a = 2
+elif( false )
+	a = 3
+else
+	a = 4
+
+a == 2
+
+TEST_CASE while loop
+
+a = 17
+
+while( a > 0 )
+	a -= 10
+
+a == -3
+
+TEST_CASE for loop
+
+s = ""
+
+for( i in [10, 20, 30] )
+	s ~= " " ~ i
+
+s == " 10 20 30"
+
+TEST_CASE break loop
+
+c = 0
+
+for( i in [1, 2, "abc", 3, nil, 4] )
+{
+	if( type(i) == "nil" )
+		break
+	
+	c += 1
+}
+
+c == 4
+
+TEST_CASE continue loop
+
+ c = 0
+
+for( i in [1, 2, "abc", 3, nil, 4] )
+{
+	if( type(i) == "string" )
+		continue
+		
+	c += 1
+}
+
+c == 5
+
+TEST_CASE result of if expression
+
+v = if( 4 > 0 ) 17 else 42
+
+v == 17
+
+TEST_CASE result of if expression without else
+
+v = if( false ) "something"
+
+v == nil
+
+TEST_CASE result of a block
+
+v = {	t = 16
+		p = t ^ 2
+		p + 2
+		if( p < 100 ) 0 else 42
+	}
+
+v == 42
+
+TEST_CASE result of a while loop
+
+c = 0
+
+v = while( c < 10 )
+		c += 1
+
+v == 10
+
+TEST_CASE result of a while loop which doesn't run not even once
+
+v = while( false ) 100
+
+v == nil
+
+TEST_CASE result of a for loop terminated by a break
+
+v = for( i in range(10) )
+	{
+		if( i > 5 )
+			break -1
+		7
+	}
+
+v == -1
+
+TEST_CASE result of a for loop when a continue skips the last iteration
+
+v = for( i in range(10) )
+	{
+		if( i > 5 )
+			continue -2
+		8
+	}
+
+v == -2
+
+TEST_CASE MUST_BE_ERROR continue cannot be part of a non boolean expressions 1
+
+while( false )
+	17 + continue
+
+TEST_CASE MUST_BE_ERROR continue cannot be part of a non boolean expressions 2
+
+while( false )
+	(continue 1) + 17
+
+TEST_CASE MUST_BE_ERROR break cannot be part of a non boolean expressions 1
+
+while( false )
+	17 + break
+
+TEST_CASE MUST_BE_ERROR break cannot be part of a non boolean expressions 2
+
+while( false )
+	(break 1) + 17
+
+TEST_CASE MUST_BE_ERROR return cannot be part of a non boolean expressions 1
+
+f ::
+	17 + return
+
+TEST_CASE MUST_BE_ERROR return cannot be part of a non boolean expressions 2
+
+f ::
+	(return 1) + 17
+
+TEST_CASE continue in a boolean expression
+
+a = 0
+v =	for( i in [1, 2, nil] )
+		a = i or continue 6
+
+a == 2 and
+v == 6
+
+TEST_CASE break in a boolean expression
+
+a = 0
+v =	for( i in [1, nil, 2] )
+		a = i or break 9
+
+a == 1 and
+v == 9
+
+TEST_CASE return in a boolean expression
+
+f :(a, b)
+{
+	a != nil or return 0
+	b != nil or return 1
+	return 11
+}
+
+f(1, 2)   == 11 and
+f(nil, 2) == 0  and
+f(1)      == 1
+
+TEST_CASE MUST_BE_ERROR continue outside of a loop 1
+
+continue
+
+TEST_CASE MUST_BE_ERROR continue outside of a loop 2
+
+while( false )
+	f :: continue
+
+TEST_CASE MUST_BE_ERROR break outside of a loop 1
+
+break
+
+TEST_CASE MUST_BE_ERROR break outside of a loop 2
+
+while( false )
+	f :: break

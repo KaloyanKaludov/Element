@@ -42,10 +42,14 @@ bool Logger::HasErrorMessages() const
 	return ! mErrorMessages.empty();
 }
 
-void Logger::PrintErrorMessages() const
+std::string Logger::GetCombinedErrorMessages() const
 {
+	std::string combined;
+	
 	for(auto it = mErrorMessages.rbegin(); it != mErrorMessages.rend(); ++it)
-		printf("%s", it->c_str());
+		combined += *it + "\n";
+	
+	return combined;
 }
 
 void Logger::ClearErrorMessages()

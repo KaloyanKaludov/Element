@@ -12,7 +12,7 @@ struct Array;
 struct Object;
 struct Function;
 struct Box;
-struct Generator;
+struct Iterator;
 struct GarbageCollected;
 struct Error;
 
@@ -35,13 +35,13 @@ struct Value
 		VT_Array			= 8,
 		VT_Object			= 9,
 		VT_Box				= 10,
-		VT_NativeGenerator	= 11,
+		VT_Iterator			= 11,
 		VT_Error			= 12,
 	};
 
 	Type type;
 
-	typedef Value (*NativeFunction)(VirtualMachine&, std::vector<Value>&);
+	typedef Value (*NativeFunction)(VirtualMachine&, const Value&, const std::vector<Value>&);
 
 	union
 	{
@@ -54,7 +54,7 @@ struct Value
 		Object*			object;
 		Function*		function;
 		Box*			box;
-		Generator*		nativeGenerator;
+		Iterator*		iterator;
 		NativeFunction	nativeFunction;
 		Error*			error;
 
@@ -71,13 +71,14 @@ struct Value
 	Value(Object* object);
 	Value(Function* function);
 	Value(Box* box);
-	Value(Generator* nativeGenerator);
+	Value(Iterator* iterator);
 	Value(NativeFunction nativeFunction);
 	Value(Error* error);
 
 	Value(const Value& o);
 
 	bool		IsGarbageCollected() const;
+	bool		IsNil() const;
 	bool		IsFunction() const;
 	bool		IsArray() const;
 	bool		IsObject() const;
@@ -86,8 +87,9 @@ struct Value
 	bool		IsNumber() const;
 	bool		IsFloat() const;
 	bool		IsInt() const;
+	bool		IsHash() const;
 	bool		IsBox() const;
-	bool		IsNativeGenerator() const;
+	bool		IsIterator() const;
 	bool		IsError() const;
 
 	int			AsInt() const;

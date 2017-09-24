@@ -173,7 +173,7 @@ void Parser::DebugPrintAST(const ast::Node* root, int indent) const
 		{
 			ast::ForNode* n = (ast::ForNode*)root;
 			printSpace(); printf("For\n");
-			DebugPrintAST(n->iterator, indent + TabSize);
+			DebugPrintAST(n->iteratingVariable, indent + TabSize);
 			printSpace(); printf("In\n");
 			DebugPrintAST(n->iteratedExpression, indent + TabSize);
 			printSpace(); printf("Do\n");
@@ -286,7 +286,7 @@ ast::Node* Parser::ParseExpression()
 
 	if( currentToken == T_EOF )
 		return nullptr;
-
+	
 	// https://www.engr.mun.ca/~theo/Misc/exp_parsing.htm
 	// https://en.wikipedia.org/wiki/Shunting-yard_algorithm
 	std::vector<Operator>	operators;
@@ -657,6 +657,9 @@ ast::Node* Parser::ParseBlock()
 
 		if( ! node )
 		{
+			if( ! mLogger.HasErrorMessages() )
+				mLogger.PushError(mLexer.GetCurrentCoords(), "Syntax error: expression expected");
+			
 			for( ast::Node* trash : nodes )
 				delete trash;
 			return nullptr;
