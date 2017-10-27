@@ -9,6 +9,19 @@ namespace element
 namespace nativefunctions
 {
 
+struct NamedFunction
+{
+	std::string				name;
+	Value::NativeFunction	function;
+};
+
+const std::vector<NamedFunction>& GetAllFunctions();
+
+	
+Value LoadElement		(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args);
+Value AddSearchPath		(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args);
+Value GetSearchPaths	(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args);
+Value ClearSearchPaths	(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args);
 Value Type				(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args);
 Value ThisCall			(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args);
 Value GarbageCollect	(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args);

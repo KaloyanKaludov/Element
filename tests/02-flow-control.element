@@ -248,3 +248,9 @@ TEST_CASE MUST_BE_ERROR break outside of a loop 2
 
 while( false )
 	f :: break
+
+TEST_CASE return can leave the main function
+
+return true
+
+false

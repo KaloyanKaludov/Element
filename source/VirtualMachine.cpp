@@ -1,45 +1,40 @@
 #include "VirtualMachine.h"
 
 #include <cmath>
-#include <cstring>
 #include <algorithm>
 #include <iterator>
-#include <stdarg.h>
-#include "Constant.h"
-#include "Symbol.h"
-#include "Logger.h"
+#include <fstream>
+#include "AST.h"
+#include "Native.h"
 
 
 namespace element
 {
 
-VirtualMachine::VirtualMachine(Logger& logger)
-: mLogger(logger)
+VirtualMachine::VirtualMachine()
+: mLogger()
+, mParser(mLogger)
+, mSemanticAnalyzer(mLogger)
+, mCompiler(mLogger)
+, mFileManager()
 , mMemoryManager()
 , mExecutionContext(nullptr)
 , mStack(nullptr)
-, mGlobals(mMemoryManager.GetTheGlobals())
 {
-}
-
-Value VirtualMachine::Execute(const char* bytecode)
-{
-	int firstFunctionConstantIndex = ParseBytecode(bytecode);
-
-	Function* main = mConstants[ firstFunctionConstantIndex ].function;
-
-    ExecutionContext dummyContext;
-    mExecutionContext = &dummyContext;
-    mStack = &dummyContext.stack;
-
-	return CallFunction_Common(Value(), main, {});
+	RegisterStandardUtilities();
 }
 
 void VirtualMachine::ResetState()
 {
-	mMemoryManager.ResetState();
+	mLogger.ClearErrorMessages();
 	
-	mErrorMessage.clear();
+	mSemanticAnalyzer.ResetState();
+
+	mCompiler.ResetState();
+
+	mFileManager.ResetState();
+
+	mMemoryManager.ResetState();
 	
 	mConstantStrings.clear();
 	mConstantFunctions.clear();
@@ -47,16 +42,104 @@ void VirtualMachine::ResetState()
 	mConstants.clear();
 	
 	mNativeFunctions.clear();
-	mSymbolInfos.clear();
+	mSymbolNames.clear();
 	
 	mExecutionContext = nullptr;
 	mStack = nullptr;
+	
+	mErrorMessage.clear();
+	
+	RegisterStandardUtilities();
 }
 
-int VirtualMachine::AddNativeFunction(Value::NativeFunction function)
+Value VirtualMachine::Interpret(std::istream& input)
 {
-	mNativeFunctions.push_back(function);
-	return int(mNativeFunctions.size()) - 1;
+	Value result;
+
+	std::unique_ptr<ast::FunctionNode> node = mParser.Parse(input);
+
+	if( !mLogger.HasErrorMessages() )
+	{
+		mSemanticAnalyzer.Analyze(node.get());
+
+		if( !mLogger.HasErrorMessages() )
+		{
+			std::unique_ptr<char[]> bytecode = mCompiler.Compile(node.get());
+
+			if( !mLogger.HasErrorMessages() )
+			{
+				result = ExecuteBytecode(bytecode.get(), mMemoryManager.GetDefaultModule());
+			}
+		}
+	}
+
+	if( mLogger.HasErrorMessages() )
+	{
+		result = mMemoryManager.NewError( mLogger.GetCombinedErrorMessages() );
+		mLogger.ClearErrorMessages();
+	}
+
+	ClearError();
+
+	return result;
+}
+
+Value VirtualMachine::Interpret(const std::string& filename)
+{
+	std::string fileToExecute = mFileManager.PushFileToExecute(filename);
+	
+	if( fileToExecute.empty() )
+		return mMemoryManager.NewError("file-not-found");
+	
+	Module& module = mMemoryManager.GetModuleForFile(fileToExecute);
+	
+	if( module.bytecode.get() != nullptr )
+	{
+		mFileManager.PopFileToExecute();
+		return module.result;
+	}
+	
+	Value result;
+	std::unique_ptr<char[]> bytecode;
+	
+	std::ifstream input(fileToExecute);
+
+	std::unique_ptr<ast::FunctionNode> node = mParser.Parse(input);
+
+	if( !mLogger.HasErrorMessages() )
+	{
+		mSemanticAnalyzer.Analyze(node.get());
+
+		if( !mLogger.HasErrorMessages() )
+		{
+			bytecode = mCompiler.Compile(node.get());
+
+			if( !mLogger.HasErrorMessages() )
+			{
+				result = ExecuteBytecode(bytecode.get(), module);
+			}
+		}
+	}
+
+	if( mLogger.HasErrorMessages() )
+	{
+		result = mMemoryManager.NewError( mLogger.GetCombinedErrorMessages() );
+		mLogger.ClearErrorMessages();
+	}
+
+	ClearError();
+	
+	module.result = result;
+	module.bytecode = std::move(bytecode);
+	
+	mFileManager.PopFileToExecute();
+
+	return result;
+}
+
+FileManager& VirtualMachine::GetFileManager()
+{
+	return mFileManager;
 }
 
 MemoryManager& VirtualMachine::GetMemoryManager()
@@ -64,20 +147,9 @@ MemoryManager& VirtualMachine::GetMemoryManager()
 	return mMemoryManager;
 }
 
-void VirtualMachine::SetError(const char* format, ...)
+void VirtualMachine::SetError(const std::string& errorMessage)
 {
-	char buffer[256];
-	int charsWritten = 0;
-
-	va_list args;
-	va_start(args, format);
-	charsWritten += vsprintf(buffer, format, args);
-	va_end(args);
-
-	buffer[charsWritten++] = '\n';
-	buffer[charsWritten] = '\0';
-
-	mErrorMessage = std::string(buffer, charsWritten);
+	mErrorMessage = errorMessage;
 }
 
 bool VirtualMachine::HasError() const
@@ -88,6 +160,20 @@ bool VirtualMachine::HasError() const
 void VirtualMachine::ClearError()
 {
 	mErrorMessage.clear();
+}
+
+void VirtualMachine::RegisterNativeFunction(const std::string& name, Value::NativeFunction function)
+{
+	int index = int(mNativeFunctions.size());
+	
+	mNativeFunctions.push_back(function);
+	
+	mSemanticAnalyzer.AddNativeFunction(name, index);
+}
+
+std::string VirtualMachine::GetVersion() const
+{
+	return "element interpreter version 0.0.5";
 }
 
 Iterator* VirtualMachine::MakeIteratorForValue(const Value& value)
@@ -134,64 +220,33 @@ unsigned VirtualMachine::GetHashFromName(const std::string& name)
 	if( name == "proto" )
 		hash = Symbol::ProtoHash;
 
-	auto it = mSymbolInfos.find(hash);
+	auto it = mSymbolNames.find(hash);
 
-	while(	it != mSymbolInfos.end() &&	// found the hash but
-			it->second.name != name )	// didn't find the name
+	while(	it != mSymbolNames.end() &&	// found the hash but
+			it->second != name )		// didn't find the name
 	{
 		hash += step;
-		it = mSymbolInfos.find(hash);
+		it = mSymbolNames.find(hash);
 	}
 
-	if( it == mSymbolInfos.end() )
-		mSymbolInfos[hash] = {name, -1};
+	if( it == mSymbolNames.end() )
+		mSymbolNames[hash] = name;
 
 	return hash;
 }
 
 bool VirtualMachine::GetNameFromHash(unsigned hash, std::string* name)
 {
-	auto it = mSymbolInfos.find(hash);
+	auto it = mSymbolNames.find(hash);
 	
-	if( it != mSymbolInfos.end() )
+	if( it != mSymbolNames.end() )
 	{
 		if( name )
-			*name = it->second.name;
+			*name = it->second;
 		return true;
 	}
 	
 	return false;
-}
-
-int VirtualMachine::GetGlobalIndex(const std::string& name) const
-{
-	unsigned hash = Symbol::Hash(name);
-	unsigned step = Symbol::HashStep(hash);
-
-	if( name == "proto" )
-		hash = Symbol::ProtoHash;
-
-	auto it = mSymbolInfos.find( hash );
-
-	while(	it != mSymbolInfos.end() &&	// found the hash but
-			it->second.name != name )	// didn't find the name
-	{
-		hash += step;
-		it = mSymbolInfos.find(hash);
-	}
-
-	if( it == mSymbolInfos.end() )
-		return -1;
-
-	return it->second.globalIndex;
-}
-
-Value VirtualMachine::GetGlobal(int index) const
-{
-	if( index >= 0 && index < int(mGlobals.size()) )
-		return mGlobals[index];
-
-	return Value();
 }
 
 Value VirtualMachine::GetMember(const Value& object, const std::string& memberName)
@@ -218,19 +273,14 @@ void VirtualMachine::SetMember(const Value& object, unsigned memberHash, const V
 	StoreMemberInObject(object.object, memberHash, value);
 }
 
-Value VirtualMachine::CallFunction(const std::string& name, const std::vector<Value>& args)
+void VirtualMachine::PushElement(const Value& array, const Value& value)
 {
-	int index = GetGlobalIndex(name);
-
-	if( index < 0 ) // not found
-		return Value();
-
-	return CallFunction_Common(Value(), GetGlobal(index), args);
+	PushElementToArray(array.array, value);
 }
 
-Value VirtualMachine::CallFunction(int index, const std::vector<Value>& args)
+void VirtualMachine::AddElement(const Value& array, int atIndex, const Value& value)
 {
-	return CallFunction_Common(Value(), GetGlobal(index), args);
+	StoreElementInArray(array.array, atIndex, value);
 }
 
 Value VirtualMachine::CallFunction(const Value& function, const std::vector<Value>& args)
@@ -255,6 +305,125 @@ Value VirtualMachine::CallMemberFunction(const Value& object, unsigned functionH
 Value VirtualMachine::CallMemberFunction(const Value& object, const Value& function, const std::vector<Value>& args)
 {
 	return CallFunction_Common(object, function, args);
+}
+
+Value VirtualMachine::ExecuteBytecode(const char* bytecode, Module& forModule)
+{
+	int firstFunctionConstantIndex = ParseBytecode(bytecode, forModule);
+
+	Function* main = mConstants[ firstFunctionConstantIndex ].function;
+
+	ExecutionContext dummyContext;
+
+	if( !mExecutionContext ) // first run
+	{
+		mExecutionContext = &dummyContext;
+		mStack = &dummyContext.stack;
+	}
+	
+	return CallFunction_Common(Value(), main, {});
+}
+
+int VirtualMachine::ParseBytecode(const char* bytecode, Module& forModule)
+{
+	int firstFunctionConstantIndex = -1;
+
+	unsigned* p = (unsigned*)bytecode;
+
+	unsigned symbolsSize = *p;
+	++p;
+	unsigned symbolsCount = *p;
+	++p;
+	unsigned symbolsOffset = *p;
+	++p;
+
+	char* symbolIt = (char*)p;
+	char* symbolsEnd = symbolIt + symbolsSize;
+
+	p = (unsigned*)symbolsEnd;
+
+	unsigned constantsSize = *p;
+	++p;
+	unsigned constantsCount = *p;
+	++p;
+	unsigned constantsOffset = *p;
+	++p;
+
+	char* constantIt = (char*)p;
+	char* constantsEnd = constantIt + constantsSize;
+
+	mSymbolNames.reserve(symbolsCount + symbolsOffset);
+
+	Symbol currentSymbol;
+
+	while( symbolIt < symbolsEnd )
+	{
+		symbolIt = currentSymbol.ReadSymbol(symbolIt);
+		
+		mSymbolNames[currentSymbol.hash] = currentSymbol.name;
+	}
+
+	mConstants.reserve(constantsCount + constantsOffset);
+
+	Constant currentConstant;
+
+	while( constantIt < constantsEnd )
+	{
+		constantIt = currentConstant.ReadConstant(constantIt);
+		
+		switch( currentConstant.type )
+		{
+		case Constant::CT_Nil:
+			mConstants.emplace_back();
+			break;
+		
+		case Constant::CT_Integer:
+			mConstants.emplace_back( currentConstant.integer );
+			break;
+
+		case Constant::CT_Float:
+			mConstants.emplace_back( currentConstant.floatingPoint );
+			break;
+
+		case Constant::CT_Bool:
+			mConstants.emplace_back( currentConstant.boolean );
+			break;
+		
+		case Constant::CT_String:
+		{
+			mConstantStrings.emplace_back( std::move(*(currentConstant.string)) );
+			
+			mConstantStrings.back().state = GarbageCollected::GC_Static;
+			
+			mConstants.emplace_back( &mConstantStrings.back() );
+			break;
+		}
+		
+		case Constant::CT_CodeObject:
+		{
+			mConstantCodeObjects.emplace_back( std::move(*currentConstant.codeObject) );
+			
+			CodeObject* codeObject = &mConstantCodeObjects.back();
+
+			codeObject->module = &forModule;
+
+			mConstantFunctions.emplace_back( codeObject );
+			mConstantFunctions.back().state = GarbageCollected::GC_Static;
+			
+			if( firstFunctionConstantIndex == -1 )
+				firstFunctionConstantIndex = int(mConstants.size());
+
+			mConstants.emplace_back( &mConstantFunctions.back() );
+			break;
+		}
+		
+		default:
+			SetError("Unknown constant type");
+			return firstFunctionConstantIndex;
+		}
+	}
+
+	return firstFunctionConstantIndex;
 }
 
 Value VirtualMachine::CallFunction_Common(const Value& thisObject, const Value& function, const std::vector<Value>& args)
@@ -288,153 +457,6 @@ Value VirtualMachine::CallFunction_Common(const Value& thisObject, const Value& 
 	}
 }
 
-int VirtualMachine::ParseBytecode(const char* bytecode)
-{
-	int firstFunctionConstantIndex = -1;
-
-	unsigned* p = (unsigned*)bytecode;
-
-	unsigned symbolsSize	= *p;
-	++p;
-	//unsigned symbolsCount	= *p;
-	++p;
-	//unsigned symbolsOffset= *p;
-	++p;
-
-	char* symbols	= (char*)p;
-	char* symbolsEnd= symbols + symbolsSize;
-
-	Symbol*	symbolIt= (Symbol*)symbols;
-
-	Symbol currentSymbol;
-	while( (char*)symbolIt < symbolsEnd )
-	{
-		symbolIt = (Symbol*)currentSymbol.ReadSymbol((char*)symbolIt);
-		mSymbolInfos[currentSymbol.hash] = {currentSymbol.name, currentSymbol.globalIndex};
-	}
-
-	p = (unsigned*)symbolsEnd;
-
-	unsigned constantsSize	= *p;
-	++p;
-	unsigned constantsCount	= *p;
-	++p;
-	unsigned constantsOffset= *p;
-	++p;
-
-	const char*	constants	= (const char*)p;
-	const char*	constantsEnd= constants + constantsSize;
-
-	Constant* constant = (Constant*)constants;
-
-	mConstants.reserve(constantsCount + constantsOffset);
-
-	while( (char*)constant < constantsEnd )
-	{
-		switch(constant->type)
-		{
-		case Constant::CT_Nil:
-			mConstants.emplace_back();
-			++constant;
-			break;
-
-		case Constant::CT_Integer:
-			mConstants.emplace_back( constant->integer );
-			++constant;
-			break;
-
-		case Constant::CT_Float:
-			mConstants.emplace_back( constant->floatingPoint );
-			++constant;
-			break;
-
-		case Constant::CT_Bool:
-			mConstants.emplace_back( constant->boolean );
-			++constant;
-			break;
-
-		case Constant::CT_String:
-		{
-			unsigned* uintp = (unsigned*)((Constant::Type*)constant + 1);
-			unsigned size = *uintp;
-			char* buffer = (char*)(uintp + 1);
-
-			mConstantStrings.emplace_back(buffer, size);
-
-			mConstantStrings.back().state = GarbageCollected::GC_Static;
-
-			mConstants.emplace_back( &mConstantStrings.back() );
-
-			constant = (Constant*)(buffer + size);
-			break;
-		}
-
-		case Constant::CT_CodeObject:
-		{
-			unsigned* uintp = (unsigned*)((Constant::Type*)constant + 1);
-			unsigned closureSize = *uintp;
-			++uintp;
-			unsigned instructionsSize = *uintp;
-			++uintp;
-			unsigned linesSize = *uintp;
-
-			int* intp = (int*)(uintp + 1);
-			int localVariablesCount = *intp;
-			++intp;
-			int namedParametersCount = *intp;
-			++intp;
-
-			int*			closureMapping	= nullptr;
-			Instruction*	instructions	= nullptr;
-			SourceCodeLine*	lines			= nullptr;
-
-			if( closureSize > 0 )
-			{
-				closureMapping = intp;
-				instructions = (Instruction*)(closureMapping + closureSize);
-			}
-			else // no closure, just instructions
-			{
-				instructions = (Instruction*)intp;
-			}
-
-			lines = (SourceCodeLine*)(instructions + instructionsSize);
-
-			mConstantCodeObjects.emplace_back(	instructions,
-												instructionsSize,
-												lines,
-												linesSize,
-												localVariablesCount,
-												namedParametersCount );
-
-			CodeObject* codeObject = &mConstantCodeObjects.back();
-
-			if( closureSize > 0 )
-				codeObject->closureMapping.assign(closureMapping, closureMapping + closureSize);
-
-			mConstantFunctions.emplace_back( codeObject );
-
-			mConstantFunctions.back().state = GarbageCollected::GC_Static;
-
-			mConstants.emplace_back( &mConstantFunctions.back() );
-
-			if( firstFunctionConstantIndex == -1 )
-				firstFunctionConstantIndex = int(mConstants.size() - 1);
-
-			constant = (Constant*)(lines + linesSize);
-			break;
-		}
-
-		default:
-			printf("unknown constant type\n");
-			++constant;
-			break;
-		}
-	}
-
-	return firstFunctionConstantIndex;
-}
-
 Value VirtualMachine::RunCode()
 {
 	StackFrame* frame = nullptr;
@@ -447,44 +469,13 @@ Value VirtualMachine::RunCode()
 		RunCodeForFrame( frame );
 
 		if( HasError() )
-			break;
-	}
-
-	// check errors, construct stack trace
-	if( HasError() )
-	{
-		int line = CurrentLineFromFrame(frame);
-
-		mLogger.PushError(line, mErrorMessage.c_str());
-
-		mErrorMessage = "called from here";
-
-		if( mExecutionContext )
 		{
-			mExecutionContext->stackFrames.pop_back();
+			LogStackTraceStartingFrom(frame);
 
-			ExecutionContext* currentContext = mExecutionContext;
-
-			while( currentContext )
-			{
-				std::deque<StackFrame>& stackFrames = currentContext->stackFrames;
-
-				while( ! stackFrames.empty() )
-				{
-					line = CurrentLineFromFrame( &stackFrames.back() );
-
-					mLogger.PushError(line, mErrorMessage.c_str());
-
-					stackFrames.pop_back();
-				}
-
-				currentContext = currentContext->parent;
-			}
+			return mMemoryManager.NewError("runtime-error");
 		}
-
-		return mMemoryManager.NewError("runtime-error");
 	}
-
+	
 	// result if any
 	Value result;
 
@@ -591,7 +582,7 @@ void VirtualMachine::RunCodeForFrame(StackFrame* frame)
 		case OC_LoadGlobal: // A is the index in the global scope
 		{
 			unsigned index = unsigned(frame->ip->A);
-			mStack->push_back( index < mGlobals.size() ? mGlobals[index] : Value() );
+			mStack->push_back( index < frame->globals->size() ? frame->globals->at(index) : Value() );
 			++frame->ip;
 			break;
 		}
@@ -617,7 +608,7 @@ void VirtualMachine::RunCodeForFrame(StackFrame* frame)
 			break;
 
 		case OC_LoadThis: // load the current frame's this object
-			mStack->emplace_back( frame->thisObject ? frame->thisObject : Value() );
+			mStack->emplace_back( frame->thisObject );
 			++frame->ip;
 			break;
 
@@ -629,9 +620,9 @@ void VirtualMachine::RunCodeForFrame(StackFrame* frame)
 		case OC_StoreGlobal: // A is the index in the global scope
 		{
 			unsigned index = unsigned(frame->ip->A);
-			if( index >= mGlobals.size() )
-				mGlobals.resize(index + 1);
-			mGlobals[index] = mStack->back();
+			if( index >= frame->globals->size() )
+				frame->globals->resize(index + 1);
+			frame->globals->at(index) = mStack->back();
 			++frame->ip;
 			break;
 		}
@@ -645,9 +636,9 @@ void VirtualMachine::RunCodeForFrame(StackFrame* frame)
 		case OC_PopStoreGlobal: // A is the index in the global scope
 		{
 			unsigned index = unsigned(frame->ip->A);
-			if( index >= mGlobals.size() )
-				mGlobals.resize(index + 1);
-			mGlobals[index] = mStack->back();
+			if( index >= frame->globals->size() )
+				frame->globals->resize(index + 1);
+			frame->globals->at(index) = mStack->back();
 			mStack->pop_back();
 			++frame->ip;
 			break;
@@ -807,7 +798,7 @@ void VirtualMachine::RunCodeForFrame(StackFrame* frame)
 
 			if( mStack->back().IsArray() )
 			{
-				mStack->back().array->elements.push_back( newValue );
+				PushElementToArray(mStack->back().array, newValue);
 				mStack->pop_back();
 				mStack->push_back( newValue );
 			}
@@ -825,19 +816,14 @@ void VirtualMachine::RunCodeForFrame(StackFrame* frame)
 		{
 			if( mStack->back().IsArray() )
 			{
-				auto& elements = mStack->back().array->elements;
-				if( ! elements.empty() )
-				{
-					Value popped = elements.back();
-					elements.pop_back();
-					mStack->pop_back();
+				Array* array = mStack->back().array;
+				mStack->pop_back();
+				
+				Value popped;
+				if( PopElementFromArray(array, &popped) )
 					mStack->push_back( popped );
-				}
 				else
-				{
-					mStack->pop_back();
 					mStack->push_back( mMemoryManager.NewError("empty-array") );
-				}
 			}
 			else
 			{
@@ -1416,8 +1402,9 @@ void VirtualMachine::Call(int argumentsCount)
 	newFrame->function		= function;
 	newFrame->instructions	= codeObject->instructions.data();
 	newFrame->ip			= newFrame->instructions;
-	newFrame->thisObject	= mExecutionContext->lastObject.object;
-
+	newFrame->thisObject	= mExecutionContext->lastObject;
+	newFrame->globals		= &codeObject->module->globals;
+	
 	newFrame->variables.resize( codeObject->localVariablesCount );
 
 	// bind parameters to local variables //////////////////////////////////////
@@ -1455,6 +1442,25 @@ void VirtualMachine::CallNative(int argumentsCount)
 	Value result = function(*this, mExecutionContext->lastObject, arguments);
 
 	mStack->push_back(result);
+}
+
+void VirtualMachine::PushElementToArray(Array* array, const Value& newValue)
+{
+	array->elements.push_back(newValue);
+
+	mMemoryManager.UpdateGcRelationship(array, newValue);
+}
+
+bool VirtualMachine::PopElementFromArray(Array* array, Value* outValue)
+{
+	if( !array->elements.empty() )
+	{
+		*outValue = array->elements.back();
+		array->elements.pop_back();
+		return true;
+	}
+	
+	return false;
 }
 
 void VirtualMachine::LoadElementFromArray(const Array* array, int index, Value* outValue)
@@ -1862,29 +1868,94 @@ bool VirtualMachine::DoBinaryOperation(int opCode)
 	return true;
 }
 
-int VirtualMachine::CurrentLineFromFrame(const StackFrame* frame) const
+void VirtualMachine::RegisterStandardUtilities()
 {
-	const auto& lines = frame->function->codeObject->instructionLines;
+	std::string executablePath = mFileManager.GetExecutablePath();
+	mFileManager.AddSearchPath(executablePath + "../stdlib");
+	
+	for( const auto& native : nativefunctions::GetAllFunctions() )
+		RegisterNativeFunction(native.name, native.function);
+}
+
+void VirtualMachine::LogStackTraceStartingFrom(const StackFrame* frame)
+{
+	using namespace std::string_literals;
+	
+	int line = -1;
+	std::string oldFilename;
+	std::string newFilename;
+	LocationFromFrame(frame, &line, &oldFilename);
+
+	mLogger.PushError(line, mErrorMessage);
+
+	mErrorMessage = "called from here";
+
+	if( mExecutionContext )
+	{
+		mExecutionContext->stackFrames.pop_back();
+
+		ExecutionContext* currentContext = mExecutionContext;
+
+		while( currentContext )
+		{
+			std::deque<StackFrame>& stackFrames = currentContext->stackFrames;
+
+			while( ! stackFrames.empty() )
+			{
+				LocationFromFrame(&stackFrames.back(), &line, &newFilename);
+				
+				if( oldFilename != newFilename )
+				{
+					mLogger.PushError("file: "s + oldFilename);
+					oldFilename = newFilename;
+				}
+				
+				mLogger.PushError(line, mErrorMessage);
+
+				stackFrames.pop_back();
+			}
+
+			currentContext = currentContext->parent;
+		}
+	}
+}
+
+void VirtualMachine::LocationFromFrame(const StackFrame* frame, int* currentLine, std::string* currentFile) const
+{
+	const CodeObject* codeObject = frame->function->codeObject;
+	
+	*currentLine = -1;
+	*currentFile = codeObject->module->filename;
+	
+	const auto& lines = codeObject->instructionLines;
 
 	if( lines.empty() )
-		return -1;
+		return;
 
 	if( lines.size() == 1 )
-		return lines.back().line;
-
-	int instructionIndex = frame->ip - frame->function->codeObject->instructions.data();
+	{
+		*currentLine = lines.back().line;
+		return;
+	}
+	
+	int instructionIndex = frame->ip - codeObject->instructions.data();
 
 	int lineIndex = -1;
 
 	for( const SourceCodeLine& line : lines )
 	{
 		if( instructionIndex >= line.instructionIndex )
+		{
 			lineIndex = line.line;
+		}
 		else
-			return lineIndex;
+		{
+			*currentLine = lineIndex;
+			return;
+		}
 	}
 
-	return lineIndex;
+	*currentLine = lineIndex;
 }
 
 }

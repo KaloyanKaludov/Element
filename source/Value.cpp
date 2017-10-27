@@ -254,7 +254,7 @@ std::string Value::AsString() const
 
 		std::string result = "[ ";
 
-		if( size > 1 ) // we always have atleast the proto member
+		if( size > 1 ) // we always have at least the proto member
 		{
 			for( unsigned i = 1; i < size - 1; ++i )
 			{

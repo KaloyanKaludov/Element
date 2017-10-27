@@ -1,6 +1,8 @@
 #ifndef _OP_CODES_INCLUDED_
 #define _OP_CODES_INCLUDED_
 
+#include <string>
+
 namespace element
 {
 
@@ -113,10 +115,9 @@ struct Instruction
 		unsigned H;
 	};
 
-	Instruction(OpCode opCode, int A = 0)
-	: opCode(opCode)
-	, A(A)
-	{}
+	Instruction(OpCode opCode, int A = 0);
+	
+	std::string AsString() const;
 };
 
 }

@@ -4,6 +4,14 @@ o = [x=1, y=2, z=3]
 
 o.z == 3
 
+TEST_CASE key with the same name as the value works properly
+
+a = 7
+
+o = [a=a]
+
+o.a == a
+
 TEST_CASE getting the size of an object
 
 o = [x=1, y=2, z=3]

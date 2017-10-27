@@ -25,6 +25,14 @@ a[1] == not b[1] and
 a[2] == not b[2] and
 a[3] == not b[3]
 
+TEST_CASE function filter() picks true
+
+a = [true, false, false, true]
+
+a = filter(a, ::$)
+
+#a == 2
+
 TEST_CASE function to_upper() 1
 
 to_upper("aBcDeF") == "ABCDEF"
@@ -48,3 +56,20 @@ to_lower("") == ""
 TEST_CASE function to_lower() 3
 
 to_lower("B11a") == "b11a"
+
+TEST_CASE function keys() returns the keys from an object 1
+
+o = [aaa=1]
+
+k = keys(o)
+
+#k == 2 // "proto", "aaa"
+
+TEST_CASE function keys() returns the keys from an object 2
+
+o = [aaa=1]
+
+k = keys(o)
+
+k[0] == "aaa" or
+k[1] == "aaa"

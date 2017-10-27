@@ -1,0 +1,22 @@
+sum :: $ + $1
+
+multiply :: $ * $1
+
+Pi = 3.1415926
+
+origin = [x=0, y=0, z=0]
+
+name = "Sally"
+
+notTwo = 9
+
+hidden = 4 // not exported
+
+[
+	sum      = sum,
+	multiply = multiply,
+	Pi       = Pi,
+	origin   = origin,
+	name     = name,
+	notTwo   = notTwo,
+]

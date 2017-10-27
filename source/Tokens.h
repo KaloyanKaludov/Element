@@ -89,6 +89,8 @@ enum Token : int
 	T_InvalidToken
 };
 
+const char* TokenAsString(Token token);
+
 }
 
 #endif // _TOKENS_H_INCLUDED_

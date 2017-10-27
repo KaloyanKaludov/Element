@@ -1,0 +1,95 @@
+TEST_CASE load simple module 1
+
+m = load_element("test-modules/simple-module.element")
+
+m -> type() == "object"
+
+TEST_CASE load simple module 2
+
+m = load_element("test-modules/simple-module")
+
+m -> type() == "object"
+
+TEST_CASE load simple module 3
+
+m = load_element("./test-modules/simple-module.element")
+
+m -> type() == "object"
+
+TEST_CASE load simple module 4
+
+m = load_element("../tests/test-modules/simple-module.element")
+
+m -> type() == "object"
+
+TEST_CASE MUST_BE_ERROR fail to load non existing file
+
+load_element("!!!!!!!.element")
+
+TEST_CASE MUST_BE_ERROR fail to load file with an error in it
+
+load_element("test-modules/error-on-load-module.element")
+
+TEST_CASE MUST_BE_ERROR runtime error from another file
+
+m = load_element("test-modules/runtime-error-module.element")
+
+m.g()
+
+TEST_CASE get exported stuff from module
+
+m = load_element("test-modules/simple-module.element")
+
+m.sum(1, 2) == 3 and
+m.multiply(4, 5) == 20 and
+m.Pi > 3.12 and m.Pi < 3.16 and
+m.origin.x == 0
+
+TEST_CASE don't get non-exported stuff from module
+
+m = load_element("test-modules/simple-module.element")
+
+m.hidden == nil
+
+TEST_CASE loading the same module twice returns the same result
+
+a = load_element("test-modules/simple-module.element")
+
+a.notTwo = 2
+
+b = load_element("test-modules/simple-module.element")
+
+b.notTwo == 2
+
+TEST_CASE get current element search paths
+
+paths = get_search_paths()
+
+paths -> type() == "array" and
+#paths > 0 and
+paths[0] -> type() == "string"
+
+TEST_CASE add new element search path
+
+add_search_path("./test-modules")
+
+m = load_element("simple-module")
+
+m -> type() == "object"
+
+TEST_CASE search paths are not duplicated
+
+before = #get_search_paths()
+
+add_search_path("test-modules")
+add_search_path("./test-modules")
+
+after = #get_search_paths()
+
+after == before + 1
+
+TEST_CASE clearing all search paths
+
+clear_search_paths()
+
+#get_search_paths() == 0

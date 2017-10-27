@@ -6,11 +6,12 @@
 #include <string>
 #include "Tokens.h"
 #include "Lexer.h"
-#include "Logger.h"
 
 namespace element
 {
 
+class Logger;
+	
 namespace ast
 {
 	struct Node;
@@ -23,8 +24,6 @@ class Parser
 public:		Parser(Logger& logger);
 
 	auto	Parse(std::istream& input) -> std::unique_ptr<ast::FunctionNode>;
-
-	void	DebugPrintAST(const ast::Node* root, int indent = 0) const;
 
 protected:
 	enum ExpressionType

@@ -1,0 +1,44 @@
+// The 'load_element' function executes other element files and returns
+// the cached result. This is the basis of the module system.
+
+constants = load_element("example-modules/constants-module.element")
+
+// The result of a file is the last expression executed of that file
+// just like a function. The last thing the "constants-module.element"
+// file does is to create an object containing the constant Pi.
+
+print(constants.Pi)
+
+// The location of the currently executing file is always in the current
+// search path.
+
+functions = load_element("./example-modules/functions-module.element")
+
+print(functions.sum(2, 5))
+
+// When a module is first executed its result (which is usually an object)
+// is cached. Calling 'load_element' more than once will return the same
+// cached object.
+
+objectA = load_element("example-modules/module-with-state")
+objectB = load_element("example-modules/module-with-state")
+
+// This means that we can change the state associated with a module from
+// other modules, thus allowing them to communicate.
+
+objectA.setValue(12)
+objectB.getValue() -> print()
+
+objectB.setValue(42)
+objectA.getValue() -> print()
+
+// We can modify the element search paths using the functions:
+// 'add_search_path', 'get_search_paths' and 'clear_search_paths'
+
+get_search_paths() -> print()
+
+// The "stdlib" directory is automatically added to the search paths.
+
+cu = load_element("coroutine-utils")
+
+[1,2,3] -> cu.array_iterator() -> cu.lazy_map(::$ + 1) -> cu.coroutine_gather() -> print()

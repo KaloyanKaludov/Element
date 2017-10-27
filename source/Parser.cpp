@@ -1,10 +1,11 @@
 #include "Parser.h"
 
-#include <algorithm>
 #include "AST.h"
 #include "Lexer.h"
 #include "Logger.h"
 #include "Operators.h"
+
+using namespace std::string_literals;
 
 namespace element
 {
@@ -47,232 +48,6 @@ std::unique_ptr<ast::FunctionNode> Parser::Parse(std::istream& input)
 
 	// return the global "main" function
 	return std::make_unique<ast::FunctionNode>(std::vector<std::string>(), body, SourceCoords());
-}
-
-void Parser::DebugPrintAST(const ast::Node* root, int indent) const
-{
-	if( ! root )
-		return;
-
-	static const int TabSize = 2;
-
-	std::string space;
-	for( int i = 0; i < indent; ++i )
-		space.push_back(' ');
-	auto printSpace = [&](){ printf("%s", space.c_str()); };
-
-	switch( root->type )
-	{
-	case ast::Node::N_Nil:
-		{
-			printSpace(); printf("Nil\n");
-			break;
-		}
-	case ast::Node::N_Bool:
-		{
-			 ast::BoolNode* n = (ast::BoolNode*)root;
-			 printSpace(); printf("Bool %s\n", n->value ? "true" : "false");
-			 break;
-		}
-	case ast::Node::N_Integer:
-		{
-			ast::IntegerNode* n = (ast::IntegerNode*)root;
-			printSpace(); printf("Int %d\n", n->value);
-			break;
-		}
-	case ast::Node::N_Float:
-		{
-			ast::FloatNode* n = (ast::FloatNode*)root;
-			printSpace(); printf("Float %f\n", n->value);
-			break;
-		}
-	case ast::Node::N_String:
-		{
-			ast::StringNode* n = (ast::StringNode*)root;
-			printSpace(); printf("String \"%s\"\n", n->value.c_str());
-			break;
-		}
-	case ast::Node::N_Variable:
-		{
-			ast::VariableNode* n = (ast::VariableNode*)root;
-			printSpace(); printf("Variable ");
-			if( n->variableType == ast::VariableNode::V_Named )
-				printf("%s\n", n->name.c_str());
-			else if( n->variableType == ast::VariableNode::V_This )
-				printf("this\n");
-			else if( n->variableType == ast::VariableNode::V_ArgumentList )
-				printf("argument list\n");
-			else if( n->variableType == ast::VariableNode::V_Underscore )
-				printf("_\n");
-			else
-				printf("argument at index %d\n", n->variableType);
-			break;
-		}
-	case ast::Node::N_Arguments:
-		{
-			ast::ArgumentsNode* n = (ast::ArgumentsNode*)root;
-			if( n->arguments.empty() )
-			{
-				printSpace(); printf("Empty argument list\n");
-			}
-			else
-			{
-				for( const auto& argument : n->arguments )
-				{
-					printSpace(); printf("Argument\n");
-					DebugPrintAST(argument, indent + TabSize);
-				}
-			}
-			break;
-		}
-	case ast::Node::N_UnaryOperator:
-		{
-			ast::UnaryOperatorNode* n = (ast::UnaryOperatorNode*)root;
-			printSpace(); printf("Unary "); mLexer.DebugPrintToken(n->op);
-			printf("\n");
-			DebugPrintAST(n->operand, indent + TabSize);
-			break;
-		}
-	case ast::Node::N_BinaryOperator:
-		{
-			ast::BinaryOperatorNode* n = (ast::BinaryOperatorNode*)root;
-			printSpace();
-			if( n->op != T_LeftBracket )
-				mLexer.DebugPrintToken(n->op);
-			else
-				printf("[]");
-			printf("\n");
-			DebugPrintAST(n->lhs, indent + TabSize);
-			DebugPrintAST(n->rhs, indent + TabSize);
-			break;
-		}
-	case ast::Node::N_If:
-		{
-			ast::IfNode* n = (ast::IfNode*)root;
-			printSpace(); printf("If\n");
-			DebugPrintAST(n->condition, indent + TabSize);
-			printSpace(); printf("Then\n");
-			DebugPrintAST(n->thenPath, indent + TabSize);
-			if( n->elsePath )
-			{
-				printSpace(); printf("Else\n");
-				DebugPrintAST(n->elsePath, indent + TabSize);
-			}
-			break;
-		}
-	case ast::Node::N_While:
-		{
-			ast::WhileNode* n = (ast::WhileNode*)root;
-			printSpace(); printf("While\n");
-			DebugPrintAST(n->condition, indent + TabSize);
-			printSpace(); printf("Do\n");
-			DebugPrintAST(n->body, indent + TabSize);
-			break;
-		}
-	case ast::Node::N_For:
-		{
-			ast::ForNode* n = (ast::ForNode*)root;
-			printSpace(); printf("For\n");
-			DebugPrintAST(n->iteratingVariable, indent + TabSize);
-			printSpace(); printf("In\n");
-			DebugPrintAST(n->iteratedExpression, indent + TabSize);
-			printSpace(); printf("Do\n");
-			DebugPrintAST(n->body, indent + TabSize);
-			break;
-		}
-	case ast::Node::N_Block:
-		{
-			ast::BlockNode* n = (ast::BlockNode*)root;
-			printSpace(); printf("{\n");
-			for( const auto& it : n->nodes )
-				DebugPrintAST(it, indent + TabSize);
-			printSpace(); printf("}\n");
-			break;
-		}
-	case ast::Node::N_Array:
-		{
-			ast::ArrayNode* n = (ast::ArrayNode*)root;
-			printSpace(); printf("[\n");
-			for( const auto& it : n->elements )
-				DebugPrintAST(it, indent + TabSize);
-			printSpace(); printf("]\n");
-			break;
-		}
-	case ast::Node::N_Object:
-		{
-			ast::ObjectNode* n = (ast::ObjectNode*)root;
-			if( n->members.empty() )
-			{
-				printSpace(); printf("[=]\n");
-			}
-			else
-			{
-				printSpace(); printf("[\n");
-				for( const auto& member : n->members )
-				{
-					printSpace(); printf("Key\n");
-					DebugPrintAST(member.first, indent + TabSize);
-					printSpace(); printf("Value\n");
-					DebugPrintAST(member.second, indent + TabSize);
-				}
-				printSpace(); printf("]\n");
-			}
-			break;
-		}
-	case ast::Node::N_Function:
-		{
-			ast::FunctionNode* n = (ast::FunctionNode*)root;
-			printSpace(); printf("Function (");
-			size_t sz = n->namedParameters.size();
-			for( size_t i = 0; i < sz; ++i )
-				printf(i == sz - 1 ? "%s" : "%s, ", n->namedParameters[i].c_str());
-			printf(")\n");
-			DebugPrintAST(n->body, indent + TabSize);
-			break;
-		}
-	case ast::Node::N_FunctionCall:
-		{
-			ast::FunctionCallNode* n = (ast::FunctionCallNode*)root;
-			printSpace(); printf("FunctionCall\n");
-			DebugPrintAST(n->function, indent + TabSize);
-			DebugPrintAST(n->arguments, indent + TabSize);
-			break;
-		}
-	case ast::Node::N_Return:
-		{
-			ast::ReturnNode* n = (ast::ReturnNode*)root;
-			printSpace(); printf("Return\n");
-			if( n->value )
-				DebugPrintAST(n->value, indent + TabSize);
-			break;
-		}
-	case ast::Node::N_Break:
-		{
-			ast::BreakNode* n = (ast::BreakNode*)root;
-			printSpace(); printf("Break\n");
-			if( n->value )
-				DebugPrintAST(n->value, indent + TabSize);
-			break;
-		}
-	case ast::Node::N_Continue:
-		{
-			ast::ContinueNode* n = (ast::ContinueNode*)root;
-			printSpace(); printf("Continue\n");
-			if( n->value )
-				DebugPrintAST(n->value, indent + TabSize);
-			break;
-		}
-	case ast::Node::N_Yield:
-		{
-			ast::YieldNode* n = (ast::YieldNode*)root;
-			printSpace(); printf("Yield\n");
-			if( n->value )
-				DebugPrintAST(n->value, indent + TabSize);
-			break;
-		}
-	default:
-		{}
-	}
 }
 
 ast::Node* Parser::ParseExpression()
@@ -504,7 +279,7 @@ ast::Node* Parser::ParsePrimary()
 		return ParseControlExpression();
 
 	default:
-		mLogger.PushError(mLexer.GetCurrentCoords(), "Syntax error: unexpected token %s", mLexer.GetCurrentTokenAsString());
+		mLogger.PushError(mLexer.GetCurrentCoords(), "Syntax error: unexpected token "s + TokenAsString(mLexer.GetCurrentToken()));
 		return nullptr;
 	}
 }
@@ -545,7 +320,7 @@ ast::Node* Parser::ParsePrimitive()
 			return new ast::BoolNode(b, coords);
 		}
 	default:
-		mLogger.PushError(coords, "Syntax error: unexpected token %s", mLexer.GetCurrentTokenAsString());
+		mLogger.PushError(coords, "Syntax error: unexpected token "s + TokenAsString(mLexer.GetCurrentToken()));
 		return nullptr;
 	}
 }
@@ -584,7 +359,7 @@ ast::Node* Parser::ParseVarialbe()
 			return new ast::VariableNode(s, coords);
 		}
 	default:
-		mLogger.PushError(coords, "Syntax error: unexpected token %s", mLexer.GetCurrentTokenAsString());
+		mLogger.PushError(coords, "Syntax error: unexpected token "s + TokenAsString(mLexer.GetCurrentToken()));
 		return nullptr;
 	}
 }

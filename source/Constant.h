@@ -41,13 +41,18 @@ struct Constant
 	Constant(CodeObject* codeObject);
 	~Constant();
 	
-	bool Equals(int i) const;
-	bool Equals(float f) const;
-	bool Equals(const std::string& str) const;
+	bool		Equals(int i) const;
+	bool		Equals(float f) const;
+	bool		Equals(const std::string& str) const;
 	
-	unsigned CalculateSize() const;
+	void		Clear();
 	
-	char* WriteConstant(char* memoryDestination) const;
+	unsigned	CalculateSize() const;
+	
+	char*		WriteConstant(char* memoryDestination) const;
+	char*		ReadConstant(char* memorySource);
+	
+	std::string AsDebugString() const;
 };
 
 }

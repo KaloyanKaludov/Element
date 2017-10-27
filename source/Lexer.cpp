@@ -110,7 +110,7 @@ begining:
 		return mCurrentToken;
 	}
 
-	mLogger.PushError(mCurrentCoords.line, "Unrecognized token %c", C);
+	mLogger.PushError(mCurrentCoords, std::string("Unrecognized token ") + C);
 	return mCurrentToken = T_InvalidToken;;
 }
 
@@ -183,190 +183,12 @@ bool Lexer::GetLastBool() const
 	return mLastBool;
 }
 
-const char* Lexer::TokenAsString(Token token) const
-{
-	switch(token)
-	{
-		case T_EOF:					return "EOF";
-		case T_NewLine:				return "\\n";
-
-		case T_Identifier:			return "identifier";
-
-		case T_Integer:				return "integer";
-		case T_Float:				return "floating point number";
-		case T_String:				return "string";
-		case T_Bool:				return GetLastBool() ? "true" : "false";
-
-		case T_If:					return "if";
-		case T_Else:				return "else";
-		case T_Elif:				return "elif";
-		case T_For:					return "for";
-		case T_In:					return "in";
-		case T_While:				return "while";
-
-		case T_This:				return "this";
-		case T_Nil:					return "nil";
-
-		case T_Return:				return "return";
-		case T_Break:				return "break";
-		case T_Continue:			return "continue";
-		case T_Yield:				return "yield";
-
-		case T_And:					return "and";
-		case T_Or:					return "or";
-		case T_Xor:					return "xor";
-		case T_Not:					return "not";
-		case T_SizeOf:				return "#";
-
-		case T_Underscore:			return "_";
-
-		case T_LeftParent:			return "(";
-		case T_RightParent:			return ")";
-
-		case T_LeftBrace:			return "{";
-		case T_RightBrace:			return "}";
-
-		case T_LeftBracket:			return "[";
-		case T_RightBracket:		return "]";
-
-		case T_Column:				return ":";
-		case T_Semicolumn:			return ";";
-		case T_Comma:				return ",";
-		case T_Dot:					return ".";
-
-		case T_Add:					return "+";
-		case T_Subtract:			return "-";
-		case T_Divide:				return "/";
-		case T_Multiply:			return "*";
-		case T_Power:				return "^";
-		case T_Modulo:				return "%";
-		case T_Concatenate:			return "~";
-
-		case T_AssignAdd:			return "+=";
-		case T_AssignSubtract:		return "-=";
-		case T_AssignDivide:		return "/=";
-		case T_AssignMultiply:		return "*=";
-		case T_AssignPower:			return "^=";
-		case T_AssignModulo:		return "%=";
-		case T_AssignConcatenate:	return "~=";
-
-		case T_Assignment:			return "=";
-
-		case T_Equal:				return "==";
-		case T_NotEqual:			return "!=";
-		case T_Less:				return "<";
-		case T_Greater:				return ">";
-		case T_LessEqual:			return "<=";
-		case T_GreaterEqual:		return ">=";
-
-		case T_Argument:			return "$N";
-		case T_ArgumentList:		return "$$";
-		case T_Arrow:				return "->";
-		case T_ArrayPushBack:		return "<<";
-		case T_ArrayPopBack:		return ">>";
-
-		case T_InvalidToken:		return "InvalidToken";
-		default:					return "InvalidToken";
-	}
-}
-
-const char* Lexer::GetCurrentTokenAsString() const
-{
-	return TokenAsString(mCurrentToken);
-}
-
-void Lexer::DebugPrintToken(Token token) const
-{
-	switch(token)
-	{
-		case T_EOF:					printf("EOF\n"); break;
-		case T_NewLine:				printf("\n"); break;
-
-		case T_Identifier:			printf("%s ", GetLastIdentifier().c_str()); break;
-
-		case T_Integer:				printf("%d ", GetLastInteger()); break;
-		case T_Float:				printf("%f ", GetLastFloat()); break;
-		case T_String:				printf("\"%s\" ", GetLastString().c_str()); break;
-		case T_Bool:				printf(GetLastBool() ? "true " : "false "); break;
-
-		case T_If:					printf("if "); break;
-		case T_Else:				printf("else "); break;
-		case T_Elif:				printf("elif "); break;
-		case T_For:					printf("for "); break;
-		case T_In:					printf("in "); break;
-		case T_While:				printf("while "); break;
-
-		case T_This:				printf("this "); break;
-		case T_Nil:					printf("nil "); break;
-
-		case T_Return:				printf("return "); break;
-		case T_Break:				printf("break "); break;
-		case T_Continue:			printf("continue "); break;
-		case T_Yield:				printf("yield "); break;
-
-		case T_And:					printf("and "); break;
-		case T_Or:					printf("or "); break;
-		case T_Xor:					printf("xor "); break;
-		case T_Not:					printf("not "); break;
-		case T_SizeOf:				printf("# "); break;
-
-		case T_Underscore:			printf("_ "); break;
-
-		case T_LeftParent:			printf("( "); break;
-		case T_RightParent:			printf(") "); break;
-
-		case T_LeftBrace:			printf("{ "); break;
-		case T_RightBrace:			printf("} "); break;
-
-		case T_LeftBracket:			printf("[ "); break;
-		case T_RightBracket:		printf("] "); break;
-
-		case T_Column:				printf(": "); break;
-		case T_Semicolumn:			printf("; "); break;
-		case T_Comma:				printf(", "); break;
-		case T_Dot:					printf(". "); break;
-
-		case T_Add:					printf("+ "); break;
-		case T_Subtract:			printf("- "); break;
-		case T_Divide:				printf("/ "); break;
-		case T_Multiply:			printf("* "); break;
-		case T_Power:				printf("^ "); break;
-		case T_Modulo:				printf("%% "); break;
-		case T_Concatenate:			printf("~ "); break;
-
-		case T_AssignAdd:			printf("+= "); break;
-		case T_AssignSubtract:		printf("-= "); break;
-		case T_AssignDivide:		printf("/= "); break;
-		case T_AssignMultiply:		printf("*= "); break;
-		case T_AssignPower:			printf("^= "); break;
-		case T_AssignModulo: 		printf("%%= "); break;
-		case T_AssignConcatenate:	printf("~= "); break;
-
-		case T_Assignment:			printf("= "); break;
-
-		case T_Equal:				printf("== "); break;
-		case T_NotEqual:			printf("!= "); break;
-		case T_Less:				printf("< "); break;
-		case T_Greater:				printf("> "); break;
-		case T_LessEqual:			printf("<= "); break;
-		case T_GreaterEqual:		printf(">= "); break;
-
-		case T_Argument:			printf("$N "); break;
-		case T_ArgumentList:		printf("$$ "); break;
-		case T_Arrow:				printf("-> "); break;
-		case T_ArrayPushBack:		printf("<< "); break;
-		case T_ArrayPopBack:		printf(">> "); break;
-
-		case T_InvalidToken:		printf("InvalidToken "); break;
-		default:					printf("Not a token!\n");
-	}
-}
-
 void Lexer::Reset()
 {
 	C = ' ';
 	
 	mCurrentToken		= T_InvalidToken;
+	mCurrentCoords		= SourceCoords();
 	mCurrentColumn		= 1;
 	mLastIdentifier		= "";
 	mLastString			= "";

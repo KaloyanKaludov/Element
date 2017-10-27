@@ -11,6 +11,12 @@
     <Filter Include="tests">
       <UniqueIdentifier>{8d646311-5b86-4e6e-913b-42d01f28a8d6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="tests\test-modules">
+      <UniqueIdentifier>{f10ad6a0-4285-4ef1-94e9-cf29eb45428a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="examples\example-modules">
+      <UniqueIdentifier>{7bdb7ff8-ae40-4967-bc31-793339683388}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\AST.cpp">
@@ -23,9 +29,6 @@
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\DataTypes.cpp">
-      <Filter>source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\source\Interpreter.cpp">
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\Lexer.cpp">
@@ -64,6 +67,15 @@
     <ClCompile Include="..\..\source\GarbageCollected.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\source\FileManager.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\OpCodes.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\Tokens.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\source\AST.h">
@@ -76,9 +88,6 @@
       <Filter>source</Filter>
     </ClInclude>
     <ClInclude Include="..\..\source\DataTypes.h">
-      <Filter>source</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\source\Interpreter.h">
       <Filter>source</Filter>
     </ClInclude>
     <ClInclude Include="..\..\source\Lexer.h">
@@ -120,6 +129,9 @@
     <ClInclude Include="..\..\source\GarbageCollected.h">
       <Filter>source</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\source\FileManager.h">
+      <Filter>source</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\examples\basic-types.element">
@@ -152,35 +164,62 @@
     <None Include="..\..\examples\iterators.element">
       <Filter>examples</Filter>
     </None>
-    <None Include="..\..\tests\0-syntax.element">
+    <None Include="..\..\tests\00-syntax.element">
       <Filter>tests</Filter>
     </None>
-    <None Include="..\..\tests\1-basic-types.element">
+    <None Include="..\..\tests\01-basic-types.element">
       <Filter>tests</Filter>
     </None>
-    <None Include="..\..\tests\2-flow-control.element">
+    <None Include="..\..\tests\02-flow-control.element">
       <Filter>tests</Filter>
     </None>
-    <None Include="..\..\tests\3-functions.element">
+    <None Include="..\..\tests\03-functions.element">
       <Filter>tests</Filter>
     </None>
-    <None Include="..\..\tests\4-arrays.element">
+    <None Include="..\..\tests\04-arrays.element">
       <Filter>tests</Filter>
     </None>
-    <None Include="..\..\tests\5-objects.element">
+    <None Include="..\..\tests\05-objects.element">
       <Filter>tests</Filter>
     </None>
-    <None Include="..\..\tests\6-closures.element">
+    <None Include="..\..\tests\06-closures.element">
       <Filter>tests</Filter>
     </None>
-    <None Include="..\..\tests\7-coroutines.element">
+    <None Include="..\..\tests\07-coroutines.element">
       <Filter>tests</Filter>
     </None>
-    <None Include="..\..\tests\8-iteration.element">
+    <None Include="..\..\tests\08-iteration.element">
       <Filter>tests</Filter>
     </None>
-    <None Include="..\..\tests\9-standard-native-functions.element">
+    <None Include="..\..\tests\09-standard-native-functions.element">
       <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\10-modules.element">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\11-standard-functions.element">
+      <Filter>tests</Filter>
+    </None>
+    <None Include="..\..\tests\test-modules\error-on-load-module.element">
+      <Filter>tests\test-modules</Filter>
+    </None>
+    <None Include="..\..\tests\test-modules\runtime-error-module.element">
+      <Filter>tests\test-modules</Filter>
+    </None>
+    <None Include="..\..\tests\test-modules\simple-module.element">
+      <Filter>tests\test-modules</Filter>
+    </None>
+    <None Include="..\..\examples\modules.element">
+      <Filter>examples</Filter>
+    </None>
+    <None Include="..\..\examples\example-modules\constants-module.element">
+      <Filter>examples\example-modules</Filter>
+    </None>
+    <None Include="..\..\examples\example-modules\functions-module.element">
+      <Filter>examples\example-modules</Filter>
+    </None>
+    <None Include="..\..\examples\example-modules\module-with-state.element">
+      <Filter>examples\example-modules</Filter>
     </None>
   </ItemGroup>
 </Project>

@@ -9,21 +9,17 @@ namespace element
 
 struct SourceCoords
 {
-	int line;
-	int column;
-
-	SourceCoords()
-	: line(1)
-	, column(1)
-	{}
+	int line	= 1;
+	int column	= 1;
 };
 
 
 class Logger
 {
 public:
-	void		PushError(int line, const char* format, ...);
-	void		PushError(const SourceCoords& coords, const char* format, ...);
+	void		PushError(const std::string& errorMessage);
+	void		PushError(int line, const std::string& errorMessage);
+	void		PushError(const SourceCoords& coords, const std::string& errorMessage);
 	
 	bool		HasErrorMessages() const;
 	std::string	GetCombinedErrorMessages() const;

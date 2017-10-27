@@ -17,15 +17,16 @@ struct Symbol
 	
 	std::string	name;
 	unsigned	hash;
-	int			globalIndex;
 	
 	Symbol();
-	Symbol(const std::string& name, unsigned hash, int globalIndex = -1);
+	Symbol(const std::string& name, unsigned hash);
 	
-	unsigned CalculateSize() const;
+	unsigned	CalculateSize() const;
 	
 	char*		WriteSymbol(char* memoryDestination) const;
-	const char*	ReadSymbol(const char* memorySource);
+	char*		ReadSymbol(char* memorySource);
+	
+	std::string	AsDebugString() const;
 };
 
 }

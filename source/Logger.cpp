@@ -2,39 +2,26 @@
 
 #include <stdarg.h>
 
+using namespace std::string_literals;
+
 namespace element
 {
 
-void Logger::PushError(int line, const char* format, ...)
+void Logger::PushError(const std::string& errorMessage)
 {
-	char buffer[256];
-	int charsWritten = sprintf(buffer, "Line %d: ", line);
-	
-	va_list args;
-	va_start(args, format);
-	charsWritten += vsprintf(buffer + charsWritten, format, args);
-	va_end(args);
-	
-	buffer[charsWritten++] = '\n';
-	buffer[charsWritten] = '\0';
-	
-	mErrorMessages.emplace_back(buffer);
+	mErrorMessages.emplace_back(errorMessage);
 }
 
-void Logger::PushError(const SourceCoords& coords, const char* format, ...)
+void Logger::PushError(int line, const std::string& errorMessage)
 {
-	char buffer[256];
-	int charsWritten = sprintf(buffer, "Line %d Column %d\n\t", coords.line, coords.column);
-	
-	va_list args;
-	va_start(args, format);
-	charsWritten += vsprintf(buffer + charsWritten, format, args);
-	va_end(args);
-	
-	buffer[charsWritten++] = '\n';
-	buffer[charsWritten] = '\0';
-	
-	mErrorMessages.emplace_back(buffer);
+	mErrorMessages.emplace_back("line "s + std::to_string(line) + ": " + errorMessage);
+}
+
+void Logger::PushError(const SourceCoords& coords, const std::string& errorMessage)
+{
+	mErrorMessages.emplace_back("line "s + std::to_string(coords.line) +
+								" column "s + std::to_string(coords.column) +
+								"\n\t"s + errorMessage);
 }
 
 bool Logger::HasErrorMessages() const

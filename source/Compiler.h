@@ -4,28 +4,30 @@
 #include <memory>
 #include <vector>
 #include <deque>
-#include <map>
-#include "AST.h"
+#include <unordered_map>
 #include "Constant.h"
 #include "Symbol.h"
-#include "OpCodes.h"
-#include "DataTypes.h"
 
 namespace element
 {
 
 class Logger;
+struct CodeObject;
+
+namespace ast
+{
+	struct Node;
+	struct FunctionNode;
+}
 
 
 class Compiler
 {
-public:						Compiler(Logger& logger);
+public:  Compiler(Logger& logger);
 
-	std::unique_ptr<char[]>	Compile(const ast::FunctionNode* node);
+	auto Compile(const ast::FunctionNode* node) -> std::unique_ptr<char[]>;
 
-	void					ResetState();
-
-	void					DebugPrintBytecode(const char* bytecode, bool printSymbols, bool printConstants) const;
+	void ResetState();
 
 protected:
 	struct FunctionContext
@@ -68,24 +70,24 @@ protected:
 	bool BuildHashLoadOp	(const ast::Node* node);
 	void BuildJumpStatement	(const ast::Node* node);
 
-	unsigned UpdateSymbol(const std::string& name, int globalIndex = -1);
+	unsigned UpdateSymbol(const std::string& name);
 
 	std::unique_ptr<char[]> BuildBinaryData();
 
 private:
-	Logger&						mLogger;
+	Logger&									mLogger;
 
-	std::deque<Constant>		mConstants;
-	unsigned					mConstantsTotalOffset;
+	std::vector<LoopContext>				mLoopContexts;
+	std::vector<FunctionContext>			mFunctionContexts;
 
-	std::vector<LoopContext>	mLoopContexts;
-	std::vector<FunctionContext>mFunctionContexts;
+	CodeObject*								mCurrentFunction;
+	
+	std::deque<Constant>					mConstants;
+	unsigned								mConstantsOffset;
 
-	CodeObject*					mCurrentFunction;
-
-	std::map<unsigned, unsigned>mSymbolIndices;
-	std::vector<Symbol>			mSymbols;
-	unsigned					mSymbolsOffset;
+	std::unordered_map<unsigned, unsigned>	mSymbolIndices;
+	std::vector<Symbol>						mSymbols;
+	unsigned								mSymbolsOffset;
 };
 
 }

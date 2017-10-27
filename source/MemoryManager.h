@@ -3,6 +3,8 @@
 
 #include <deque>
 #include <limits>
+#include <memory>
+#include <unordered_map>
 
 #include "DataTypes.h"
 #include "GarbageCollected.h"
@@ -16,8 +18,9 @@ public:					MemoryManager();
 						~MemoryManager();
 						
 	void				ResetState();
-
-	std::vector<Value>&	GetTheGlobals();
+	
+	Module&				GetDefaultModule();
+	Module&				GetModuleForFile(const std::string& filename);
 
 	String*				NewString();
 	String*				NewString(const std::string& str);
@@ -40,7 +43,7 @@ public:					MemoryManager();
 	void				UpdateGcRelationship(GarbageCollected* parent, const Value& child);
 
 	int					GetHeapObjectsCount(Value::Type type) const;
-
+	
 protected:
 	enum GCStage : char
 	{
@@ -53,6 +56,7 @@ protected:
 
 protected:
 	void		DeleteHeap();
+	void		AddToHeap(GarbageCollected* gc);
 	void		FreeGC(GarbageCollected* gc);
 	void		MakeGrayIfNeeded(GarbageCollected* gc, int* steps);
 
@@ -62,27 +66,28 @@ protected:
 	int			SweepRest(int steps);
 
 private:
-	GarbageCollected*				mHeapHead;
+	GarbageCollected*						mHeapHead;
 
-	GCStage							mGCStage;
-	GarbageCollected::State			mCurrentWhite;
-	GarbageCollected::State			mNextWhite;
-	std::deque<GarbageCollected*>	mGrayList;
-	GarbageCollected*				mPreviousGC;
-	GarbageCollected*				mCurrentGC;
+	GCStage									mGCStage;
+	GarbageCollected::State					mCurrentWhite;
+	GarbageCollected::State					mNextWhite;
+	std::deque<GarbageCollected*>			mGrayList;
+	GarbageCollected*						mPreviousGC;
+	GarbageCollected*						mCurrentGC;
 
 	// memory roots
-	std::vector<Value>				mGlobals;
-	std::vector<ExecutionContext*>	mExecutionContexts;
-
+	Module									mDefaultModule;
+	std::unordered_map<std::string, Module>	mModules;
+	std::vector<ExecutionContext*>			mExecutionContexts;
+	
 	// statistics
-	int								mHeapStringsCount;
-	int								mHeapArraysCount;
-	int								mHeapObjectsCount;
-	int								mHeapFunctionsCount;
-	int								mHeapBoxesCount;
-	int								mHeapIteratorsCount;
-	int								mHeapErrorsCount;
+	int										mHeapStringsCount;
+	int										mHeapArraysCount;
+	int										mHeapObjectsCount;
+	int										mHeapFunctionsCount;
+	int										mHeapBoxesCount;
+	int										mHeapIteratorsCount;
+	int										mHeapErrorsCount;
 };
 
 }

@@ -1,16 +1,19 @@
 #include "Compiler.h"
 
-#include <cstring>
-#include <algorithm>
 #include "Logger.h"
+#include "OpCodes.h"
+#include "DataTypes.h"
+#include "AST.h"
+
+using namespace std::string_literals;
 
 namespace element
 {
 
 Compiler::Compiler(Logger& logger)
 : mLogger(logger)
-, mConstantsTotalOffset(0)
 , mCurrentFunction(nullptr)
+, mConstantsOffset(0)
 , mSymbolsOffset(0)
 {
 	ResetState();
@@ -25,17 +28,17 @@ std::unique_ptr<char[]> Compiler::Compile(const ast::FunctionNode* node)
 
 void Compiler::ResetState()
 {
+	mLoopContexts.clear();
+	mFunctionContexts.clear();
+	
+	mCurrentFunction = nullptr;
+	
 	mConstants.clear();
 	mConstants.emplace_back();		// nil
 	mConstants.emplace_back(true);	// true
 	mConstants.emplace_back(false);	// false
 	
-	mConstantsTotalOffset = 0;
-
-	mLoopContexts.clear();
-	mFunctionContexts.clear();
-	
-	mCurrentFunction = nullptr;
+	mConstantsOffset = 0;
 
 	mSymbolIndices.clear();
 	mSymbolIndices[Symbol::ProtoHash] = 0;
@@ -44,321 +47,6 @@ void Compiler::ResetState()
 	mSymbols.emplace_back("proto", Symbol::ProtoHash);
 	
 	mSymbolsOffset = 0;
-}
-
-void Compiler::DebugPrintBytecode(const char* bytecode, bool printSymbols, bool printConstants) const
-{
-	unsigned* p = (unsigned*)bytecode;
-
-	unsigned symbolsSize	= *p;
-	++p;
-	// skip symbols count
-	++p;
-	unsigned symbolsOffset	= *p;
-	++p;
-
-	if( printSymbols )
-		printf("symbols size: %d bytes\n", symbolsSize);
-
-	char* symbols	= (char*)p;
-	char* symbolsEnd= symbols + symbolsSize;
-
-	Symbol*	symbol		= (Symbol*)symbols;
-	int		symbolIndex	= symbolsOffset;
-
-	if( printSymbols )
-	{
-		Symbol dummy;
-		while( (char*)symbol < symbolsEnd )
-		{
-			printf(" %2u  ", symbolIndex++);
-			symbol = (Symbol*)dummy.ReadSymbol((char*)symbol);
-			printf("%10X %4d    %s\n", dummy.hash, dummy.globalIndex, dummy.name.c_str());
-		}
-	}
-
-	if( ! printConstants )
-		return;
-
-	p = (unsigned*)symbolsEnd;
-
-	unsigned constantsSize	= *p;
-	++p;
-	// skip constants count
-	++p;
-	unsigned constantsOffset= *p;
-	++p;
-
-	printf("constants size: %d bytes\n", constantsSize);
-
-	char*	constants		= (char*)p;
-	char*	constantsEnd	= constants + constantsSize;
-
-	Constant*	constant		= (Constant*)constants;
-	int			constantIndex	= constantsOffset;
-
-	while( (char*)constant < constantsEnd )
-	{
-		printf(" %2u  ", constantIndex++);
-
-		switch(constant->type)
-		{
-		case Constant::CT_Nil:
-			printf("nil\n");
-			++constant;
-			break;
-
-		case Constant::CT_Integer:
-			printf("int %d\n", constant->integer);
-			++constant;
-			break;
-
-		case Constant::CT_Float:
-			printf("float %f\n", constant->floatingPoint);
-			++constant;
-			break;
-
-		case Constant::CT_Bool:
-			printf("bool %s\n", constant->boolean ? "true" : "false");
-			++constant;
-			break;
-
-		case Constant::CT_String:
-		{
-			unsigned* uintp = (unsigned*)((Constant::Type*)constant + 1);
-			unsigned size = *uintp;
-			char* buffer = (char*)(uintp + 1);
-
-			printf("string \"%s\"\n", std::string(buffer, size).c_str());
-			constant = (Constant*)(buffer + size);
-			break;
-		}
-
-		case Constant::CT_CodeObject:
-		{
-			unsigned* uintp = (unsigned*)((Constant::Type*)constant + 1);
-			unsigned closureSize = *uintp;
-			++uintp;
-			unsigned instructionsSize = *uintp;
-			++uintp;
-			unsigned linesSize = *uintp;
-
-			int* intp = (int*)(uintp + 1);
-			int localVariablesCount = *intp;
-			++intp;
-			int namedParametersCount = *intp;
-			++intp;
-
-			printf("function - %d locals (%d parameters)\n", localVariablesCount, namedParametersCount);
-
-			int*			closureMapping	= nullptr;
-			Instruction*	instructions	= nullptr;
-			SourceCodeLine*	lines			= nullptr;
-
-			if( closureSize > 0 )
-			{
-				printf("           closure created from:\n");
-				closureMapping = intp;
-				instructions = (Instruction*)(closureMapping + closureSize);
-			}
-			else // no closure, just instructions
-			{
-				instructions = (Instruction*)intp;
-			}
-
-			lines = (SourceCodeLine*)(instructions + instructionsSize);
-
-			for( unsigned i = 0; i < closureSize; ++i )
-			{
-				printf("           [%d] ", i);
-
-				int variableIndex = closureMapping[i];
-				if( variableIndex >= 0 )
-					printf("local boxed %d\n", variableIndex);
-				else
-					printf("free variable %d\n", -variableIndex - 1);
-			}
-
-			unsigned linesIndex = 0;
-
-			for( unsigned i = 0; i < instructionsSize; ++i )
-			{
-				Instruction* instruction = &instructions[i];
-
-				if( linesIndex < linesSize && int(i) >= lines[linesIndex].instructionIndex )
-				{
-					printf("       %3u %5u ", lines[linesIndex].line, i);
-					++linesIndex;
-				}
-				else
-				{
-					printf("           %5u ", i);
-				}
-
-				switch(instruction->opCode)
-				{
-				case OpCode::OC_Pop:
-					printf("Pop\n"); break;
-				case OpCode::OC_PopN:
-					printf("PopN              %d\n", instruction->A); break;
-				case OpCode::OC_Rotate2:
-					printf("Rotate2\n"); break;
-				case OpCode::OC_MoveToTOS2:
-					printf("MoveToTOS2\n"); break;
-				case OpCode::OC_Duplicate:
-					printf("Duplicate\n"); break;
-				case OpCode::OC_Unpack:
-					printf("Unpack            %d\n", instruction->A); break;
-
-				case OpCode::OC_LoadConstant:
-					printf("LoadConstant      %d\n", instruction->A); break;
-				case OpCode::OC_LoadGlobal:
-					printf("LoadGlobal        %d\n", instruction->A); break;
-				case OpCode::OC_LoadLocal:
-					printf("LoadLocal         %d\n", instruction->A); break;
-				case OpCode::OC_LoadNative:
-					printf("LoadNative        %d\n", instruction->A); break;
-				case OpCode::OC_LoadArgument:
-					printf("LoadArgument      %d\n", instruction->A); break;
-				case OpCode::OC_LoadArgsArray:
-					printf("LoadArgsArray\n"); break;
-				case OpCode::OC_LoadThis:
-					printf("LoadThis\n"); break;
-
-				case OpCode::OC_StoreGlobal:
-					printf("StoreGlobal       %d\n", instruction->A); break;
-				case OpCode::OC_StoreLocal:
-					printf("StoreLocal        %d\n", instruction->A); break;
-				case OpCode::OC_PopStoreGlobal:
-					printf("PopStoreGlobal    %d\n", instruction->A); break;
-				case OpCode::OC_PopStoreLocal:
-					printf("PopStoreLocal     %d\n", instruction->A); break;
-
-				case OpCode::OC_MakeArray:
-					printf("MakeArray         %d\n", instruction->A); break;
-				case OpCode::OC_LoadElement:
-					printf("LoadElement\n"); break;
-				case OpCode::OC_StoreElement:
-					printf("StoreElement\n"); break;
-				case OpCode::OC_PopStoreElement:
-					printf("PopStoreElement\n"); break;
-
-				case OpCode::OC_MakeObject:
-					printf("MakeObject        %d\n", instruction->A); break;
-				case OpCode::OC_MakeEmptyObject:
-					printf("MakeEmptyObject\n"); break;
-				case OpCode::OC_LoadHash:
-					printf("LoadHash          %X\n", instruction->H); break;
-				case OpCode::OC_LoadMember:
-					printf("LoadMember\n"); break;
-				case OpCode::OC_StoreMember:
-					printf("StoreMember\n"); break;
-				case OpCode::OC_PopStoreMember:
-					printf("PopStoreMember\n"); break;
-
-				case OpCode::OC_MakeIterator:
-					printf("MakeIterator\n"); break;
-				case OpCode::OC_IteratorHasNext:
-					printf("IteratorHasNext\n"); break;
-				case OpCode::OC_IteratorGetNext:
-					printf("IteratorGetNext\n"); break;
-
-				case OpCode::OC_MakeBox:
-					printf("MakeBox           %d\n", instruction->A); break;
-				case OpCode::OC_LoadFromBox:
-					printf("LoadFromBox       %d\n", instruction->A); break;
-				case OpCode::OC_StoreToBox:
-					printf("StoreToBox        %d\n", instruction->A); break;
-				case OpCode::OC_PopStoreToBox:
-					printf("PopStoreToBox     %d\n", instruction->A); break;
-				case OpCode::OC_MakeClosure:
-					printf("MakeClosure\n"); break;
-				case OpCode::OC_LoadFromClosure:
-					printf("LoadFromClosure   %d\n", instruction->A); break;
-				case OpCode::OC_StoreToClosure:
-					printf("StoreToClosure    %d\n", instruction->A); break;
-				case OpCode::OC_PopStoreToClosure:
-					printf("PopStoreToClosure %d\n", instruction->A); break;
-
-				case OpCode::OC_Jump:
-					printf("Jump              %d\n", instruction->A); break;
-				case OpCode::OC_JumpIfFalse:
-					printf("JumpIfFalse       %d\n", instruction->A); break;
-				case OpCode::OC_PopJumpIfFalse:
-					printf("PopJumpIfFalse    %d\n", instruction->A); break;
-				case OpCode::OC_JumpIfFalseOrPop:
-					printf("JumpIfFalseOrPop  %d\n", instruction->A); break;
-				case OpCode::OC_JumpIfTrueOrPop:
-					printf("JumpIfTrueOrPop   %d\n", instruction->A); break;
-
-				case OpCode::OC_FunctionCall:
-					printf("FunctionCall      %d\n", instruction->A); break;
-				case OpCode::OC_Yield:
-					printf("Yield\n"); break;
-				case OpCode::OC_EndFunction:
-					printf("EndFunction\n"); break;
-
-				case OpCode::OC_Add:
-					printf("Add\n"); break;
-				case OpCode::OC_Subtract:
-					printf("Subtract\n"); break;
-				case OpCode::OC_Multiply:
-					printf("Multiply\n"); break;
-				case OpCode::OC_Divide:
-					printf("Divide\n"); break;
-				case OpCode::OC_Modulo:
-					printf("Modulo\n"); break;
-				case OpCode::OC_Power:
-					printf("Power\n"); break;
-				case OpCode::OC_Concatenate:
-					printf("Concatenate\n"); break;
-				case OpCode::OC_ArrayPushBack:
-					printf("ArrayPushBack\n"); break;
-				case OpCode::OC_ArrayPopBack:
-					printf("ArrayPopBack\n"); break;
-				case OpCode::OC_Xor:
-					printf("Xor\n"); break;
-
-				case OpCode::OC_Equal:
-					printf("Equal\n"); break;
-				case OpCode::OC_NotEqual:
-					printf("NotEqual\n"); break;
-				case OpCode::OC_Less:
-					printf("Less\n"); break;
-				case OpCode::OC_Greater:
-					printf("Greater\n"); break;
-				case OpCode::OC_LessEqual:
-					printf("LessEqual\n"); break;
-				case OpCode::OC_GreaterEqual:
-					printf("GreaterEqual\n"); break;
-
-				case OpCode::OC_UnaryMinus:
-					printf("UnaryMinus\n"); break;
-				case OpCode::OC_UnaryPlus:
-					printf("UnaryPlus\n"); break;
-				case OpCode::OC_UnaryNot:
-					printf("UnaryNot\n"); break;
-				case OpCode::OC_UnaryConcatenate:
-					printf("UnaryConcatenate\n"); break;
-				case OpCode::OC_UnarySizeOf:
-					printf("UnarySizeOf\n"); break;
-
-				default:
-					mLogger.PushError(0, "Unknown op code %d\n", int(instruction->opCode));
-					break;
-				}
-			}
-
-			constant = (Constant*)(lines + linesSize);
-			break;
-		}
-
-		default:
-			mLogger.PushError(0, "Unknown constant type %d\n", int(constant->type));
-			++constant;
-			break;
-		}
-	}
 }
 
 void Compiler::EmitInstructions(const ast::Node* node, bool keepValue)
@@ -442,7 +130,7 @@ void Compiler::EmitInstructions(const ast::Node* node, bool keepValue)
 		return;
 
 	default:
-		mLogger.PushError(node->coords, "Unknown AST node type %d\n", int(node->type));
+		mLogger.PushError(node->coords, "Unknown AST node type "s + std::to_string(int(node->type)));
 		break;
 	}
 }
@@ -527,7 +215,7 @@ void Compiler::BuildConstantLoad(const ast::Node* node, bool keepValue)
 	}
 
 	default:
-		mLogger.PushError(node->coords, "Unknown AST node type %d\n", int(node->type));
+		mLogger.PushError(node->coords, "Unknown AST node type "s + std::to_string(int(node->type)));
 		break;
 	}
 
@@ -543,7 +231,7 @@ void Compiler::BuildVariableLoad(const ast::Node* node, bool keepValue)
 
 	if( n->variableType == ast::VariableNode::V_Named )
 	{
-		UpdateSymbol(n->name, n->semanticType == ast::VariableNode::SMT_Global ? n->index : -1);
+		UpdateSymbol(n->name);
 
 		if( n->semanticType == ast::VariableNode::SMT_LocalBoxed && n->firstOccurrence )
 			mCurrentFunction->instructions.emplace_back( OpCode::OC_MakeBox, n->index );
@@ -630,7 +318,7 @@ void Compiler::BuildVariableStore(const ast::Node* node, bool keepValue)
 
 		if( n->variableType == ast::VariableNode::V_Named )
 		{
-			UpdateSymbol(n->name, n->semanticType == ast::VariableNode::SMT_Global ? n->index : -1);
+			UpdateSymbol(n->name);
 
 			if( n->semanticType == ast::VariableNode::SMT_LocalBoxed && n->firstOccurrence )
 				mCurrentFunction->instructions.emplace_back( OpCode::OC_MakeBox, n->index );
@@ -646,7 +334,7 @@ void Compiler::BuildVariableStore(const ast::Node* node, bool keepValue)
 				case ast::VariableNode::SMT_LocalBoxed:		opCode = OpCode::OC_StoreToBox;		break;
 				case ast::VariableNode::SMT_FreeVariable:	opCode = OpCode::OC_StoreToClosure;	break;
 				default:
-					mLogger.PushError(n->coords, "Cannot store into native variables %d\n", int(n->index));
+					mLogger.PushError(n->coords, "Cannot store into native variables "s + std::to_string(int(n->index)));
 					break;
 				}
 			}
@@ -659,7 +347,7 @@ void Compiler::BuildVariableStore(const ast::Node* node, bool keepValue)
 				case ast::VariableNode::SMT_LocalBoxed:		opCode = OpCode::OC_PopStoreToBox;		break;
 				case ast::VariableNode::SMT_FreeVariable:	opCode = OpCode::OC_PopStoreToClosure;	break;
 				default:
-					mLogger.PushError(n->coords, "Cannot store into native variables %d\n", int(n->index));
+					mLogger.PushError(n->coords, "Cannot store into native variables "s + std::to_string(int(n->index)));
 					break;
 				}
 			}
@@ -707,7 +395,7 @@ void Compiler::BuildAssignOp(const ast::Node* node, bool keepValue)
 		case T_AssignModulo:		binaryOperation = OpCode::OC_Modulo;		break;
 		case T_AssignConcatenate:	binaryOperation = OpCode::OC_Concatenate;	break;
 		default:
-			mLogger.PushError(n->coords, "Invalid assign type %d\n", int(n->op));
+			mLogger.PushError(n->coords, "Invalid assign type "s + std::to_string(int(n->op)));
 			break;
 		}
 
@@ -854,7 +542,7 @@ void Compiler::BuildBinaryOp(const ast::Node* node, bool keepValue)
 	case T_LeftBracket:		binaryOperation = OpCode::OC_LoadElement;	break;
 	case T_Dot:				binaryOperation = OpCode::OC_LoadMember;	break;
 	default:
-		mLogger.PushError(n->coords, "Unknown binary operation %d\n", n->op);
+		mLogger.PushError(n->coords, "Unknown binary operation "s + std::to_string(int(n->op)));
 		break;
 	}
 
@@ -880,7 +568,7 @@ void Compiler::BuildUnaryOp(const ast::Node* node, bool keepValue)
 	case T_Concatenate:	unaryOperation = OpCode::OC_UnaryConcatenate;	break;
 	case T_SizeOf:		unaryOperation = OpCode::OC_UnarySizeOf;		break;
 	default:
-		mLogger.PushError(n->coords, "Unknown unary operation %d\n", n->op);
+		mLogger.PushError(n->coords, "Unknown unary operation "s + std::to_string(int(n->op)));
 		break;
 	}
 
@@ -1255,7 +943,7 @@ bool Compiler::BuildHashLoadOp(const ast::Node* node)
 		if( n->variableType == ast::VariableNode::V_Named )
 		{
 			Instruction loadHash(OpCode::OC_LoadHash);
-			loadHash.H = UpdateSymbol( n->name );
+			loadHash.H = UpdateSymbol(n->name);
 
 			mCurrentFunction->instructions.push_back( loadHash );
 
@@ -1341,12 +1029,12 @@ void Compiler::BuildJumpStatement(const ast::Node* node)
 			return;
 		}
 	default:
-		mLogger.PushError(node->coords, "Unknown jump statement type %d\n", int(node->type));
+		mLogger.PushError(node->coords, "Unknown jump statement type "s + std::to_string(int(node->type)));
 		break;
 	}
 }
 
-unsigned Compiler::UpdateSymbol(const std::string& name, int globalIndex)
+unsigned Compiler::UpdateSymbol(const std::string& name)
 {
 	unsigned hash = Symbol::Hash(name);
 	unsigned step = Symbol::HashStep(hash);
@@ -1366,13 +1054,9 @@ unsigned Compiler::UpdateSymbol(const std::string& name, int globalIndex)
 	if( it == mSymbolIndices.end() ) // not found, add new symbol
 	{
 		mSymbolIndices[hash] = mSymbols.size();
-		mSymbols.emplace_back(name, hash, globalIndex);
+		mSymbols.emplace_back(name, hash);
 	}
-	else if( globalIndex >= 0 ) // already in the table, update the index
-	{
-		mSymbols[it->second].globalIndex = globalIndex;
-	}
-
+	
 	return hash;
 }
 
@@ -1387,7 +1071,7 @@ std::unique_ptr<char[]> Compiler::BuildBinaryData()
 	unsigned constantsCount = mConstants.size();
 	unsigned constantsSize = 0;
 
-	for( unsigned i = mConstantsTotalOffset; i < constantsCount; ++i )
+	for( unsigned i = mConstantsOffset; i < constantsCount; ++i )
 		constantsSize += mConstants[i].CalculateSize();
 
 	unsigned totalSize =	3 * sizeof(unsigned) + symbolsSize +
@@ -1419,21 +1103,21 @@ std::unique_ptr<char[]> Compiler::BuildBinaryData()
 
 	// write constants count
 	++p;
-	*p = constantsCount - mConstantsTotalOffset;
+	*p = constantsCount - mConstantsOffset;
 
 	// write all constant indices offset
 	++p;
-	*p = mConstantsTotalOffset;
+	*p = mConstantsOffset;
 
 	// write all constants
 	c = c + 3 * sizeof(unsigned);
 
-	for( unsigned i = mConstantsTotalOffset; i < constantsCount; ++i )
+	for( unsigned i = mConstantsOffset; i < constantsCount; ++i )
 		c = mConstants[i].WriteConstant(c);
 
 	// prepare for the next build iteration
-	mSymbolsOffset			= symbolsCount;
-	mConstantsTotalOffset	= constantsCount;
+	mSymbolsOffset		= symbolsCount;
+	mConstantsOffset	= constantsCount;
 
 	return binaryData;
 }

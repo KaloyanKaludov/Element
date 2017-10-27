@@ -5,13 +5,139 @@
 
 #include "VirtualMachine.h"
 #include "DataTypes.h"
-#include "Symbol.h"
 
 namespace element
 {
 
 namespace nativefunctions
 {
+
+const std::vector<NamedFunction> allFunctions = 
+{
+	{"load_element",		LoadElement},
+	{"add_search_path",		AddSearchPath},
+	{"get_search_paths",	GetSearchPaths},
+	{"clear_search_paths",	ClearSearchPaths},
+	{"type",				Type},
+	{"this_call",			ThisCall},
+	{"garbage_collect",		GarbageCollect},
+	{"memory_stats",		MemoryStats},
+	{"print",				Print},
+	{"to_upper",			ToUpper},
+	{"to_lower",			ToLower},
+	{"keys",				Keys},
+	{"make_error",			MakeError},
+	{"is_error",			IsError},
+	{"make_coroutine",		MakeCoroutine},
+	{"make_iterator",		MakeIterator},
+	{"iterator_has_next",	IteratorHasNext},
+	{"iterator_get_next",	IteratorGetNext},
+	{"range",				Range},
+	{"each",				Each},
+	{"times",				Times},
+	{"count",				Count},
+	{"map",					Map},
+	{"filter",				Filter},
+	{"reduce",				Reduce},
+	{"all",					All},
+	{"any",					Any},
+	{"min",					Min},
+	{"max",					Max},
+	{"sort",				Sort},
+	{"floor",				Floor},
+	{"ceil",				Ceil},
+	{"round",				Round},
+	{"sqrt",				Sqrt},
+	{"sin",					Sin},
+	{"cos",					Cos},
+	{"tan",					Tan},
+};
+
+const std::vector<NamedFunction>& GetAllFunctions()
+{
+	return allFunctions;
+}
+
+	
+Value LoadElement(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
+{
+	if( args.size() != 1 )
+	{
+		vm.SetError("function 'load_element(filename)' takes exactly one argument");
+		return Value();
+	}
+	
+	const Value& filename = args[0];
+
+	if( ! filename.IsString() )
+	{
+		vm.SetError("function 'load_element(filename)' takes a string as an argument");
+		return Value();
+	}
+	
+	Value result = vm.Interpret(filename.AsString());
+	
+	if( result.IsError() )
+		vm.SetError(std::string("error while loading: ") + filename.AsString() + "\n" + result.AsString());
+	
+	return result;
+}
+
+Value AddSearchPath(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
+{
+	if( args.size() != 1 )
+	{
+		vm.SetError("function 'add_search_path(path)' takes exactly one argument");
+		return Value();
+	}
+	
+	const Value& path = args[0];
+
+	if( ! path.IsString() )
+	{
+		vm.SetError("function 'add_search_path(path)' takes a string as an argument");
+		return Value();
+	}
+	
+	vm.GetFileManager().AddSearchPath(path.string->str);
+	
+	return Value();
+}
+
+Value GetSearchPaths(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
+{
+	if( ! args.empty() )
+	{
+		vm.SetError("function 'get_search_paths()' takes no arguments");
+		return Value();
+	}
+	
+	MemoryManager& memoryManager = vm.GetMemoryManager();
+	
+	const std::vector<std::string>& paths = vm.GetFileManager().GetSearchPaths();
+	
+	Value result = memoryManager.NewArray();
+	
+	result.array->elements.reserve( paths.size() );
+	
+	for( const std::string& path : paths )
+		vm.PushElement(result, memoryManager.NewString(path));
+	
+	return result;
+}
+
+Value ClearSearchPaths(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
+{
+	if( ! args.empty() )
+	{
+		vm.SetError("function 'clear_search_paths()' takes no arguments");
+		return Value();
+	}
+	
+	vm.GetFileManager().ClearSearchPaths();
+	
+	return Value();
+}
 
 Value Type(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>& args)
 {
@@ -161,7 +287,7 @@ Value Print(VirtualMachine& vm, const Value& thisObject, const std::vector<Value
 			case '\\': str.replace(pos, 2, "\\"); break;
 			}
 
-			pos = str.find('\\');
+			pos = str.find('\\', pos + 1);
 		}
 
 		printf("%s", str.c_str());
@@ -240,13 +366,15 @@ Value Keys(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>
 	
 	Object* object = args[0].object;
 	
-	Array* keys = memoryManager.NewArray();
+	Value keys = memoryManager.NewArray();
 	std::string name;
+	
+	keys.array->elements.reserve( object->members.size() );
 	
 	for( const Object::Member& member : object->members )
 	{
 		if( vm.GetNameFromHash(member.hash, &name) )
-			keys->elements.push_back( memoryManager.NewString(name) );
+			vm.PushElement(keys, memoryManager.NewString(name));
 		
 		name.clear();
 	}
@@ -649,7 +777,7 @@ Value Map(VirtualMachine& vm, const Value& thisObject, const std::vector<Value>&
 			if( vm.HasError() )
 				return Value();
 			
-			mapped.array->elements.push_back(result);
+			vm.PushElement(mapped, result);
 		}
 		
 		return mapped;
@@ -707,7 +835,7 @@ Value Filter(VirtualMachine& vm, const Value& thisObject, const std::vector<Valu
 				return Value();
 			
 			if( result.AsBool() )
-				filtered.array->elements.push_back(item);
+				vm.PushElement(filtered, item);
 		}
 		
 		return filtered;

@@ -32,6 +32,7 @@ void SemanticAnalyzer::Analyze(ast::FunctionNode* node)
 
 	mContext.clear();
 	mFunctionScopes.clear();
+	mGlobalVariables.clear();
 }
 
 void SemanticAnalyzer::AddNativeFunction(const std::string& name, int index)
@@ -47,11 +48,6 @@ void SemanticAnalyzer::ResetState()
 	mNativeFunctions.clear();
 
 	mCurrentFunctionNode = nullptr;
-}
-
-void SemanticAnalyzer::DebugPrintSemantics(const ast::Node* root, int indent) const
-{
-	// TODO
 }
 
 bool SemanticAnalyzer::AnalyzeNode(ast::Node* node)
@@ -259,12 +255,6 @@ bool SemanticAnalyzer::AnalyzeNode(ast::Node* node)
 			return false;
 		}
 
-		if( ! IsInFunction() )
-		{
-			mLogger.PushError(n->coords, "return can only be used inside a function");
-			return false;
-		}
-
 		if( n->value )
 			return AnalyzeNode(n->value);
 
@@ -448,7 +438,7 @@ bool SemanticAnalyzer::CheckAssignable(const ast::Node* node) const
 		}
 		if( variable->variableType >= 0 ) // anonymous parameter
 		{
-			mLogger.PushError(variable->coords, "the $%d variable is not assignable", variable->variableType);
+			mLogger.PushError(variable->coords, std::string("the $") + std::to_string(int(variable->variableType)) + " variable is not assignable");
 			return false;
 		}
 

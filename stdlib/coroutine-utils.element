@@ -1,0 +1,59 @@
+array_iterator:(array)
+    make_coroutine(::
+    {
+        for( i in array )
+            yield i
+
+        return make_error("dead-coroutine")
+    })
+
+lazy_filter:(c, p)
+    make_coroutine(::while( true )
+    {
+        value = c()
+
+        if( value -> is_error() )
+            return value
+
+        if( p(value) )
+            yield value
+    })
+
+lazy_map:(c, f)
+    make_coroutine(::while( true )
+    {
+        value = c()
+
+        if( value -> is_error() )
+            return value
+
+        yield f(value)
+    })
+
+gather:(c)
+{
+    result = []
+
+    while( true )
+    {
+        value = c()
+
+        if( value -> is_error() )
+        {
+            if( ~value == "dead-coroutine" )
+                return result
+            else
+                return value
+        }
+
+        result << value
+    }
+}
+
+// exports
+[
+    array_iterator   = array_iterator,
+    lazy_filter      = lazy_filter,
+    lazy_map         = lazy_map,
+    coroutine_gather = gather
+]

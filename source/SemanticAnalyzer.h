@@ -30,8 +30,6 @@ public:		SemanticAnalyzer(Logger& logger);
 
 	void	ResetState();
 
-	void	DebugPrintSemantics(const ast::Node* root, int indent = 0) const;
-
 protected:
 	enum ContextType
 	{

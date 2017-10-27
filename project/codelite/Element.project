@@ -37,8 +37,6 @@
     <File Name="../../source/Constant.h"/>
     <File Name="../../source/DataTypes.cpp"/>
     <File Name="../../source/DataTypes.h"/>
-    <File Name="../../source/Interpreter.cpp"/>
-    <File Name="../../source/Interpreter.h"/>
     <File Name="../../source/Lexer.cpp"/>
     <File Name="../../source/Lexer.h"/>
     <File Name="../../source/Logger.cpp"/>
@@ -57,13 +55,17 @@
     <File Name="../../source/Value.h"/>
     <File Name="../../source/VirtualMachine.cpp"/>
     <File Name="../../source/VirtualMachine.h"/>
-    <File Name="../../source/SemanticAnalyzer.cpp"/>
     <File Name="../../source/SemanticAnalyzer.h"/>
     <File Name="../../source/MemoryManager.cpp"/>
     <File Name="../../source/MemoryManager.h"/>
     <File Name="../../source/GarbageCollected.cpp"/>
     <File Name="../../source/GarbageCollected.h"/>
     <File Name="../../source/main.cpp"/>
+    <File Name="../../source/FileManager.cpp"/>
+    <File Name="../../source/FileManager.h"/>
+    <File Name="../../source/Tokens.cpp"/>
+    <File Name="../../source/OpCodes.cpp"/>
+    <File Name="../../source/SemanticAnalyzer.cpp"/>
   </VirtualDirectory>
   <VirtualDirectory Name="examples">
     <File Name="../../examples/basic-types.element"/>
@@ -76,18 +78,34 @@
     <File Name="../../examples/coroutines.element"/>
     <File Name="../../examples/arrays.element"/>
     <File Name="../../examples/iterators.element"/>
+    <File Name="../../examples/modules.element"/>
+    <VirtualDirectory Name="example-modules">
+      <File Name="../../examples/example-modules/constants-module.element"/>
+      <File Name="../../examples/example-modules/functions-module.element"/>
+      <File Name="../../examples/example-modules/module-with-state.element"/>
+    </VirtualDirectory>
   </VirtualDirectory>
   <VirtualDirectory Name="tests">
-    <File Name="../../tests/0-syntax.element"/>
-    <File Name="../../tests/5-objects.element"/>
-    <File Name="../../tests/8-iteration.element"/>
-    <File Name="../../tests/9-standard-native-functions.element"/>
-    <File Name="../../tests/1-basic-types.element"/>
-    <File Name="../../tests/2-flow-control.element"/>
-    <File Name="../../tests/3-functions.element"/>
-    <File Name="../../tests/4-arrays.element"/>
-    <File Name="../../tests/6-closures.element"/>
-    <File Name="../../tests/7-coroutines.element"/>
+    <File Name="../../tests/00-syntax.element"/>
+    <File Name="../../tests/01-basic-types.element"/>
+    <File Name="../../tests/02-flow-control.element"/>
+    <File Name="../../tests/03-functions.element"/>
+    <File Name="../../tests/04-arrays.element"/>
+    <File Name="../../tests/05-objects.element"/>
+    <File Name="../../tests/06-closures.element"/>
+    <File Name="../../tests/07-coroutines.element"/>
+    <File Name="../../tests/08-iteration.element"/>
+    <File Name="../../tests/09-standard-native-functions.element"/>
+    <File Name="../../tests/10-modules.element"/>
+    <File Name="../../tests/11-standard-functions.element"/>
+    <VirtualDirectory Name="test-modules">
+      <File Name="../../tests/test-modules/error-on-load-module.element"/>
+      <File Name="../../tests/test-modules/runtime-error-module.element"/>
+      <File Name="../../tests/test-modules/simple-module.element"/>
+    </VirtualDirectory>
+  </VirtualDirectory>
+  <VirtualDirectory Name="stdlib">
+    <File Name="../../stdlib/coroutine-utils.element"/>
   </VirtualDirectory>
   <Settings Type="Executable">
     <GlobalSettings>
@@ -99,7 +117,7 @@
       </Linker>
       <ResourceCompiler Options=""/>
     </GlobalSettings>
-    <Configuration Name="Debug" CompilerType="clang++-3.8" DebuggerType="GNU gdb debugger" Type="Executable" BuildCmpWithGlobalSettings="append" BuildLnkWithGlobalSettings="append" BuildResWithGlobalSettings="append">
+    <Configuration Name="Debug" CompilerType="GCC" DebuggerType="GNU gdb debugger" Type="Executable" BuildCmpWithGlobalSettings="append" BuildLnkWithGlobalSettings="append" BuildResWithGlobalSettings="append">
       <Compiler Options="-g;-std=c++14;-Wall;" C_Options="-g;-std=c++14;-Wall;" Assembler="" Required="yes" PreCompiledHeader="" PCHInCommandLine="no" PCHFlags="" PCHFlagsPolicy="0">
         <IncludePath Value="../../source"/>
       </Compiler>
@@ -138,7 +156,7 @@
         <SearchPaths/>
       </Completion>
     </Configuration>
-    <Configuration Name="Release" CompilerType="clang++-3.8" DebuggerType="GNU gdb debugger" Type="Executable" BuildCmpWithGlobalSettings="append" BuildLnkWithGlobalSettings="append" BuildResWithGlobalSettings="append">
+    <Configuration Name="Release" CompilerType="GCC" DebuggerType="GNU gdb debugger" Type="Executable" BuildCmpWithGlobalSettings="append" BuildLnkWithGlobalSettings="append" BuildResWithGlobalSettings="append">
       <Compiler Options="-O3;-std=c++14;-Wall" C_Options="-O3;-std=c++14;-Wall" Assembler="" Required="yes" PreCompiledHeader="" PCHInCommandLine="no" PCHFlags="" PCHFlagsPolicy="0">
         <IncludePath Value="../../source"/>
         <Preprocessor Value="NDEBUG"/>

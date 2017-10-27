@@ -29,7 +29,9 @@ MemoryManager::~MemoryManager()
 
 void MemoryManager::ResetState()
 {
-	mGlobals.clear();
+	mDefaultModule = Module();
+	
+	mModules.clear();
 	mExecutionContexts.clear();
 	
 	DeleteHeap();
@@ -49,20 +51,26 @@ void MemoryManager::ResetState()
 	mHeapErrorsCount	= 0;
 }
 
-std::vector<Value>& MemoryManager::GetTheGlobals()
+Module& MemoryManager::GetDefaultModule()
 {
-	return mGlobals;
+	return mDefaultModule;
+}
+
+Module& MemoryManager::GetModuleForFile(const std::string& filename)
+{
+	Module& module = mModules[filename];
+	
+	if( module.filename.empty() )
+		module.filename = filename;
+	
+	return module;
 }
 
 String* MemoryManager::NewString()
 {
 	String* newString = new String();
 
-	newString->state = mNextWhite;
-
-	if( mHeapHead )
-		newString->next = mHeapHead;
-	mHeapHead = newString;
+	AddToHeap(newString);
 
 	++mHeapStringsCount;
 
@@ -73,11 +81,7 @@ String*	MemoryManager::NewString(const std::string& str)
 {
 	String* newString = new String(str);
 
-	newString->state = mNextWhite;
-
-	if( mHeapHead )
-		newString->next = mHeapHead;
-	mHeapHead = newString;
+	AddToHeap(newString);
 
 	++mHeapStringsCount;
 
@@ -88,11 +92,7 @@ String*	MemoryManager::NewString(const char* str, int size)
 {
 	String* newString = new String(str, size);
 
-	newString->state = mNextWhite;
-
-	if( mHeapHead )
-		newString->next = mHeapHead;
-	mHeapHead = newString;
+	AddToHeap(newString);
 
 	++mHeapStringsCount;
 
@@ -103,11 +103,7 @@ Array* MemoryManager::NewArray()
 {
 	Array* newArray = new Array();
 
-	newArray->state = mNextWhite;
-
-	if( mHeapHead )
-		newArray->next = mHeapHead;
-	mHeapHead = newArray;
+	AddToHeap(newArray);
 
 	++mHeapArraysCount;
 
@@ -118,11 +114,7 @@ Object* MemoryManager::NewObject()
 {
 	Object* newObject = new Object();
 
-	newObject->state = mNextWhite;
-
-	if( mHeapHead )
-		newObject->next = mHeapHead;
-	mHeapHead = newObject;
+	AddToHeap(newObject);
 
 	++mHeapObjectsCount;
 
@@ -134,11 +126,7 @@ Object* MemoryManager::NewObject(const Object* other)
 	Object* newObject = new Object();
 	*newObject = *other;
 
-	newObject->state = mNextWhite;
-
-	if( mHeapHead )
-		newObject->next = mHeapHead;
-	mHeapHead = newObject;
+	AddToHeap(newObject);
 
 	++mHeapObjectsCount;
 
@@ -149,11 +137,7 @@ Function* MemoryManager::NewFunction(const Function* other)
 {
 	Function* newFunction = new Function(other);
 
-	newFunction->state = mNextWhite;
-
-	if( mHeapHead )
-		newFunction->next = mHeapHead;
-	mHeapHead = newFunction;
+	AddToHeap(newFunction);
 
 	++mHeapFunctionsCount;
 
@@ -173,11 +157,7 @@ Box* MemoryManager::NewBox()
 {
 	Box* newBox = new Box();
 
-	newBox->state = mNextWhite;
-
-	if( mHeapHead )
-		newBox->next = mHeapHead;
-	mHeapHead = newBox;
+	AddToHeap(newBox);
 
 	++mHeapBoxesCount;
 
@@ -189,11 +169,8 @@ Box* MemoryManager::NewBox(const Value& value)
 	Box* newBox = new Box();
 
 	newBox->value = value;
-	newBox->state = mNextWhite;
-
-	if( mHeapHead )
-		newBox->next = mHeapHead;
-	mHeapHead = newBox;
+	
+	AddToHeap(newBox);
 
 	++mHeapBoxesCount;
 
@@ -204,11 +181,7 @@ Iterator* MemoryManager::NewIterator(IteratorImplementation* newIterator)
 {
 	Iterator* iterator = new Iterator(newIterator);
 
-	iterator->state = mNextWhite;
-
-	if( mHeapHead )
-		iterator->next = mHeapHead;
-	mHeapHead = iterator;
+	AddToHeap(iterator);
 
 	++mHeapIteratorsCount;
 
@@ -219,12 +192,8 @@ Error* MemoryManager::NewError(const std::string& errorMessage)
 {
 	Error* newError = new Error(errorMessage);
 
-	newError->state = mNextWhite;
-
-	if( mHeapHead )
-		newError->next = mHeapHead;
-	mHeapHead = newError;
-
+	AddToHeap(newError);
+	
 	++mHeapErrorsCount;
 
 	return newError;
@@ -326,6 +295,16 @@ void MemoryManager::DeleteHeap()
 	}
 }
 
+void MemoryManager::AddToHeap(GarbageCollected* gc)
+{
+	gc->state = mNextWhite;
+
+	if( mHeapHead )
+		gc->next = mHeapHead;
+	
+	mHeapHead = gc;
+}
+
 void MemoryManager::FreeGC(GarbageCollected* gc)
 {
 	switch( gc->type )
@@ -387,9 +366,14 @@ void MemoryManager::MakeGrayIfNeeded(GarbageCollected* gc, int* steps)
 
 int MemoryManager::MarkRoots(int steps)
 {
-	for( Value& global : mGlobals )
+	for( Value& global : mDefaultModule.globals )
 		if( global.IsGarbageCollected() )
 			MakeGrayIfNeeded(global.garbageCollected, &steps);
+	
+	for( auto& kvp : mModules )
+		for( Value& global : kvp.second.globals )
+			if( global.IsGarbageCollected() )
+				MakeGrayIfNeeded(global.garbageCollected, &steps);
 
 	for( ExecutionContext* context : mExecutionContexts )
 	{

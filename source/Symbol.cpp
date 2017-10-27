@@ -1,6 +1,8 @@
 #include "Symbol.h"
 
 #include <cstring>
+#include <sstream>
+#include <iomanip>
 
 namespace element
 {
@@ -28,14 +30,12 @@ const unsigned Symbol::GetNextHash = Symbol::Hash("get_next");
 
 Symbol::Symbol()
 : hash(0)
-, globalIndex(-1)
 {
 }
 
-Symbol::Symbol(const std::string& name, unsigned hash, int globalIndex)
+Symbol::Symbol(const std::string& name, unsigned hash)
 : name(name)
 , hash(hash)
-, globalIndex(globalIndex)
 {
 }
 
@@ -43,8 +43,7 @@ unsigned Symbol::CalculateSize() const
 {
 	return	sizeof(unsigned) +			// chars count
 			sizeof(char) * name.size() +// chars
-			sizeof(unsigned) +			// hash
-			sizeof(int);				// global index or -1
+			sizeof(unsigned);			// hash
 }
 
 char* Symbol::WriteSymbol(char* memoryDestination) const
@@ -63,14 +62,11 @@ char* Symbol::WriteSymbol(char* memoryDestination) const
 	
 	memcpy(memoryDestination, &hash, sizeof(unsigned));
 	memoryDestination += sizeof(unsigned);
-	
-	memcpy(memoryDestination, &globalIndex, sizeof(int));
-	memoryDestination += sizeof(int);
-	
+		
 	return memoryDestination;
 }
 
-const char* Symbol::ReadSymbol(const char* memorySource)
+char* Symbol::ReadSymbol(char* memorySource)
 {
 	unsigned charsCount = *((unsigned*)memorySource);
 	memorySource += sizeof(unsigned);
@@ -84,10 +80,16 @@ const char* Symbol::ReadSymbol(const char* memorySource)
 	hash = *((unsigned*)memorySource);
 	memorySource += sizeof(unsigned);
 	
-	globalIndex = *((int*)memorySource);
-	memorySource += sizeof(int);
-	
 	return memorySource;
+}
+
+std::string Symbol::AsDebugString() const
+{
+	std::stringstream result;
+	
+	result << std::setw(10) << hash << "    " << name << "\n";
+	
+	return result.str();
 }
 
 }

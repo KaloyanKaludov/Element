@@ -285,6 +285,9 @@ struct YieldNode : public Node
 	~YieldNode();
 };
 
+
+std::string NodeAsDebugString(const ast::Node* root, int indent = 0);
+
 }
 
 }

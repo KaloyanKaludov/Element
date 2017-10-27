@@ -1,0 +1,7 @@
+TEST_CASE function array_iterator() produces a coroutine iterator
+
+cu = load_element("coroutine-utils.element")
+
+it = cu.array_iterator([5,6,7])
+
+it -> type() == "function"

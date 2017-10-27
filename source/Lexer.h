@@ -30,10 +30,6 @@ public:					Lexer(Logger& logger);
 	float				GetLastFloat() const;
 	bool				GetLastBool() const;
 	
-	const char*			TokenAsString(Token token) const;
-	const char*			GetCurrentTokenAsString() const;
-	void				DebugPrintToken(Token token) const;
-	
 protected:
 	void Reset();
 	
